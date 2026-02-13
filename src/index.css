@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f8fafc;
+  --muted: #64748b;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  color: #0f172a;
+}
+
+/* container */
+.container {
+  max-width: 1100px;
+}
+
+/* cards & buttons */
+.card {
+  @apply bg-white rounded-xl shadow-sm border;
+}
+.input {
+  @apply border rounded-md px-3 py-2;
+}
+.btn {
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium;
+}
+.btn-primary { @apply bg-indigo-600 text-white hover:bg-indigo-700; }
+.btn-ghost { @apply bg-transparent border text-slate-700 hover:bg-slate-50; }
+.btn-danger { @apply bg-red-600 text-white hover:bg-red-700; }
+.btn-success { @apply bg-green-600 text-white hover:bg-green-700; }
+
+/* subtle headings */
+.h1 { @apply text-3xl md:text-4xl font-extrabold tracking-tight; }
+.h2 { @apply text-2xl font-semibold; }
+.kicker { @apply uppercase text-xs text-slate-500 tracking-wider; }
+
+/* small helpers */
+.subtle { @apply text-sm text-slate-500 }
+

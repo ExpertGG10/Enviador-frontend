@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.vscode/
+.DS_Store
+token
+.chat-guides/
+testes/
+__pycache__/
+.chat-guides/
+.log
+.chat/
+*.log
