@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { config } from '../config'
 
 type JobState = {
   job_id: string
@@ -21,7 +22,7 @@ export function useJobPolling(jobId: string | null, token: string | null, interv
 
     async function fetchStatus() {
       try {
-        const resp = await fetch(`http://localhost:8000/api/jobs/${jobId}/`, {
+        const resp = await fetch(`${config.API_URL}/api/jobs/${jobId}/`, {
           headers: token ? { 'Authorization': `Token ${token}` } : undefined
         })
         if (!resp.ok) return
@@ -53,7 +54,7 @@ export function useJobPolling(jobId: string | null, token: string | null, interv
   async function cancelJob() {
     if (!jobId) return
     try {
-      await fetch(`http://localhost:8000/api/jobs/${jobId}/cancel/`, {
+      await fetch(`${config.API_URL}/api/jobs/${jobId}/cancel/`, {
         method: 'POST',
         headers: token ? { 'Authorization': `Token ${token}` } : undefined
       })

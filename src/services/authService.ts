@@ -1,5 +1,7 @@
+import { config } from '../config';
+
 // API base URL
-const API_BASE = '/api';
+const API_BASE = config.API_BASE;
 
 export interface User {
   id: number;
