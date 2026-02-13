@@ -25,7 +25,11 @@ export function useJobPolling(jobId: string | null, token: string | null, interv
         const resp = await fetch(`${config.API_URL}/api/jobs/${jobId}/`, {
           headers: token ? { 'Authorization': `Token ${token}` } : undefined
         })
-        if (!resp.ok) return
+        if (!resp.ok) {
+          const txt = await resp.text().catch(() => '')
+          console.warn('[useJobPolling] non-OK response', resp.status, txt)
+          return
+        }
         const data = await resp.json()
         if (!mounted) return
         setJob(data)
@@ -35,7 +39,7 @@ export function useJobPolling(jobId: string | null, token: string | null, interv
           timerRef.current = null
         }
       } catch (e) {
-        // ignore for now
+        console.error('[useJobPolling] fetch error', e)
       }
     }
 
@@ -59,7 +63,7 @@ export function useJobPolling(jobId: string | null, token: string | null, interv
         headers: token ? { 'Authorization': `Token ${token}` } : undefined
       })
     } catch (e) {
-      // ignore
+      console.warn('[useJobPolling] cancel error', e)
     }
   }
 

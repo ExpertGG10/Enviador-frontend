@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../hooks/useAuth'
+import { config } from '../config'
 import SendProgressModal from './SendProgressModal'
 import ErrorModal from './ErrorModal'
 
@@ -596,12 +597,12 @@ export default function SendPage() {
     console.log('[DEBUG] Todos os anexos adicionados ao FormData')
 
     // Determine which endpoint to use based on channel
-    const endpoint = channel === 'email' ? 'http://localhost:8000/api/send-email/' : 'http://localhost:8000/api/send-whatsapp/'
+    const endpoint = channel === 'email' ? `${config.API_BASE}/send-email/` : `${config.API_BASE}/send-whatsapp/`
     console.log('[DEBUG] Endpoint determinado:', endpoint)
 
     try {
       console.log('[DEBUG] Iniciando requisição para /api/jobs/start/')
-      const resp = await fetch('http://localhost:8000/api/jobs/start/', { 
+      const resp = await fetch(`${config.API_BASE}/jobs/start/`, { 
         method: 'POST', 
         body: form,
         headers: {
@@ -1187,7 +1188,7 @@ export default function SendPage() {
                   form.append('payload', JSON.stringify(payload))
                   attachments.forEach(f => form.append('files', f, f.name))
                   
-                  fetch('http://localhost:8000/api/jobs/start/', { 
+                  fetch(`${config.API_BASE}/jobs/start/`, { 
                     method: 'POST', 
                     body: form,
                     headers: {
