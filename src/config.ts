@@ -9,12 +9,13 @@ export const config = {
    * Em desenvolvimento: http://localhost:8000
    * Em produção: use VITE_API_URL no .env.production
    */
-  API_URL: 'http://localhost:8000',
+  API_URL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
 
   /**
    * Endpoint base para requisições da API
    */
-  API_BASE
+  API_BASE: import.meta.env.VITE_API_URL 
+    ? `${import.meta.env.VITE_API_URL}/api`
     : 'http://localhost:8000/api',
 };
 
