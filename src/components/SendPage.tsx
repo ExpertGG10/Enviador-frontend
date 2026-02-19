@@ -82,6 +82,33 @@ export default function SendPage() {
   } as const
   const currentTheme = themeMap[channel]
 
+  // Auto-configure contact column based on channel
+  useEffect(() => {
+    if (channel === 'email') {
+      const emailCols = headers.filter(h => 
+        h.toLowerCase().includes('email') || 
+        h.toLowerCase().includes('e-mail') ||
+        h.toLowerCase().includes('mail')
+      )
+      if (emailCols.length > 0 && !emailColumn) {
+        setEmailColumn(emailCols[0])
+      }
+    } else if (channel === 'whatsapp') {
+      const phoneCols = headers.filter(h => 
+        h.toLowerCase().includes('telefone') || 
+        h.toLowerCase().includes('celular') || 
+        h.toLowerCase().includes('numero') || 
+        h.toLowerCase().includes('número') || 
+        h.toLowerCase().includes('phone') || 
+        h.toLowerCase().includes('whatsapp') ||
+        h.toLowerCase().includes('fone')
+      )
+      if (phoneCols.length > 0 && !phoneColumn) {
+        setPhoneColumn(phoneCols[0])
+      }
+    }
+  }, [channel, headers, emailColumn, phoneColumn])
+
   // File handling
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return

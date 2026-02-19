@@ -265,14 +265,9 @@ export function AttachmentWarningsModal({ show, warnings, fileColumn, onContinue
         <div className="mt-6 flex gap-3">
           <button
             onClick={onContinue}
-            disabled={warnings.missingFilesForRecipients.length > 0}
-            className={`flex-1 btn font-semibold ${
-              warnings.missingFilesForRecipients.length > 0
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-700 text-white'
-            }`}
+            className="flex-1 btn bg-green-600 hover:bg-green-700 text-white font-semibold"
           >
-            {warnings.missingFilesForRecipients.length > 0 ? '❌ Corrija os erros primeiro' : '✓ Confirmar e Enviar'}
+            ✓ Confirmar e Enviar
           </button>
           <button
             onClick={onCancel}
