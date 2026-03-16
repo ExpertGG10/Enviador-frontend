@@ -1,7 +1,7 @@
 import React from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { accountSettingsService } from '../services/accountSettingsService'
-import { whatsappInboxService, type WhatsAppInboxResponse } from '../services/whatsappInboxService'
+import { whatsappInboxService, type WhatsAppInboxResponse, type WhatsAppTimelineMessage } from '../services/whatsappInboxService'
 import { getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
 
 type WhatsAppInboxPageProps = {
@@ -41,12 +41,12 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
 
     return inboxData.ui_components.conversation_list.map((conversation) => {
       const timeline = timelineMap.get(conversation.wa_id)
-      const inboundMessages = (timeline?.messages || []).filter((message) => message.direction === 'inbound')
+      const messages = [...(timeline?.messages || [])].sort((left, right) => left.timestamp - right.timestamp)
 
       return {
         ...conversation,
         contactName: conversation.contact_name || timeline?.contact_name || conversation.wa_id,
-        inboundMessages
+        messages
       }
     })
   }, [inboxData])
@@ -74,6 +74,18 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
       dateStyle: 'short',
       timeStyle: 'short'
     }).format(date)
+  }, [])
+
+  const getMessageDirectionLabel = React.useCallback((direction: string) => {
+    return direction === 'outbound' ? 'enviado' : 'recebido'
+  }, [])
+
+  const getMessageCardClassName = React.useCallback((message: WhatsAppTimelineMessage) => {
+    if (message.direction === 'outbound') {
+      return 'border-emerald-200 bg-emerald-50'
+    }
+
+    return 'border-slate-200 bg-slate-50'
   }, [])
 
   const resolveConfigStatus = React.useCallback(() => {
@@ -177,7 +189,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
       <div className="card p-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="h2">Inbox WhatsApp</h1>
-          <p className="text-sm text-slate-600">Mensagens recebidas separadas por contato.</p>
+          <p className="text-sm text-slate-600">Mensagens recebidas e enviadas separadas por contato.</p>
         </div>
 
         <button
@@ -226,9 +238,9 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                   </div>
 
                   <p className="mt-2 truncate text-sm text-slate-600">
-                    {conversation.inboundMessages[conversation.inboundMessages.length - 1]
-                      ? formatMessagePreview(conversation.inboundMessages[conversation.inboundMessages.length - 1])
-                      : 'Sem mensagens recebidas'}
+                    {conversation.messages[conversation.messages.length - 1]
+                      ? formatMessagePreview(conversation.messages[conversation.messages.length - 1])
+                      : 'Sem mensagens na conversa'}
                   </p>
                   <p className="mt-1 text-xs text-slate-400">{formatDateTime(conversation.last_timestamp)}</p>
                 </button>
@@ -252,17 +264,17 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                       <p className="text-sm text-slate-500">{selectedConversation.wa_id}</p>
                     </div>
                     <div className="text-sm text-slate-500">
-                      {selectedConversation.inboundMessages.length} mensagem(ns) recebida(s)
+                      {selectedConversation.messages.length} mensagem(ns) na conversa
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 space-y-3">
-                  {selectedConversation.inboundMessages.map((message) => (
-                    <article key={message.message_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  {selectedConversation.messages.map((message) => (
+                    <article key={message.message_id} className={`rounded-2xl border p-4 ${getMessageCardClassName(message)}`}>
                       <div className="flex items-center justify-between gap-3">
                         <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
-                          recebido
+                          {getMessageDirectionLabel(message.direction)}
                         </span>
                         <time className="text-xs text-slate-400">{formatDateTime(message.datetime_iso)}</time>
                       </div>
@@ -274,14 +286,19 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
                         <span className="rounded-full bg-white px-2 py-1">tipo: {message.type}</span>
                         <span className="rounded-full bg-white px-2 py-1">evento: {message.event_id}</span>
-                        <span className="rounded-full bg-white px-2 py-1">número exibido: {message.display_phone_number}</span>
+                        {message.status && (
+                          <span className="rounded-full bg-white px-2 py-1">status: {message.status}</span>
+                        )}
+                        {message.display_phone_number && (
+                          <span className="rounded-full bg-white px-2 py-1">número exibido: {message.display_phone_number}</span>
+                        )}
                       </div>
                     </article>
                   ))}
 
-                  {selectedConversation.inboundMessages.length === 0 && (
+                  {selectedConversation.messages.length === 0 && (
                     <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-                      Este contato não possui mensagens recebidas no payload atual.
+                      Este contato não possui mensagens no payload atual.
                     </div>
                   )}
                 </div>
