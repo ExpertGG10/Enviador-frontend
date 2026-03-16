@@ -2,22 +2,62 @@ import React from 'react'
 import logoUrl from '../assets/logo.svg'
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { accountSettingsService } from '../services/accountSettingsService'
+import { getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
 
 type HeaderProps = {
-  onNavigate?: (page: 'home' | 'send' | 'account' | 'contact' | 'login' | 'signup') => void
-  currentPage?: 'home' | 'send' | 'account' | 'contact' | 'login' | 'signup'
+  onNavigate?: (page: 'home' | 'send' | 'account' | 'contact' | 'whatsapp' | 'login' | 'signup') => void
+  currentPage?: 'home' | 'send' | 'account' | 'contact' | 'whatsapp' | 'login' | 'signup'
+}
+
+type NavItem = {
+  key: 'home' | 'send' | 'whatsapp' | 'account' | 'contact'
+  label: string
+  requiresWhatsAppConfig?: boolean
 }
 
 export default function Header({ onNavigate, currentPage = 'home' }: HeaderProps) {
   const [open, setOpen] = useState(false)
-  const { user, isAuthenticated, logout } = useAuth()
+  const { user, isAuthenticated, logout, token } = useAuth()
+  const [isWhatsappConfigured, setIsWhatsappConfigured] = useState(() => {
+    const settings = accountSettingsService.getCachedSettings()
+    return settings.whatsappSenders.some((sender) => getWhatsAppConfigStatus(sender).isConfigured)
+  })
 
-  const navItems = [
+  React.useEffect(() => {
+    if (!token || !isAuthenticated) {
+      setIsWhatsappConfigured(false)
+      return
+    }
+
+    let mounted = true
+
+    accountSettingsService
+      .getSettings(token)
+      .then((settings) => {
+        if (!mounted) return
+        const hasConfiguredSender = settings.whatsappSenders.some((sender) => getWhatsAppConfigStatus(sender).isConfigured)
+        setIsWhatsappConfigured(hasConfiguredSender)
+      })
+      .catch(() => {
+        if (!mounted) return
+        const cached = accountSettingsService.getCachedSettings()
+        const hasConfiguredSender = cached.whatsappSenders.some((sender) => getWhatsAppConfigStatus(sender).isConfigured)
+        setIsWhatsappConfigured(hasConfiguredSender)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [isAuthenticated, token])
+
+  const navItems: NavItem[] = [
     { key: 'home', label: 'Início' },
     { key: 'send', label: 'Enviar' },
+    { key: 'whatsapp', label: 'WhatsApp', requiresWhatsAppConfig: true },
     { key: 'account', label: 'Conta' },
     { key: 'contact', label: 'Contato' }
-  ] as const
+  ]
 
   const navClass = (p: string) =>
     `px-3 py-2 rounded-md text-sm font-medium ${currentPage === p ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'}`
@@ -41,7 +81,16 @@ export default function Header({ onNavigate, currentPage = 'home' }: HeaderProps
 
         <nav className="hidden md:flex gap-4 items-center">
           {navItems.map(n => (
-            <button key={n.key} onClick={() => onNavigate?.(n.key as any)} className={navClass(n.key as any)}>
+            <button
+              key={n.key}
+              onClick={() => {
+                if (n.requiresWhatsAppConfig && !isWhatsappConfigured) return
+                onNavigate?.(n.key as any)
+              }}
+              className={`${navClass(n.key as any)} ${n.requiresWhatsAppConfig && !isWhatsappConfigured ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={Boolean(n.requiresWhatsAppConfig && !isWhatsappConfigured)}
+              title={n.requiresWhatsAppConfig && !isWhatsappConfigured ? 'Configure o WhatsApp na aba Conta para liberar.' : undefined}
+            >
               {n.label}
             </button>
           ))}
@@ -77,7 +126,17 @@ export default function Header({ onNavigate, currentPage = 'home' }: HeaderProps
         <div className="md:hidden absolute left-0 right-0 bg-white border-t shadow-sm">
           <div className="container mx-auto px-4 py-4 flex flex-col gap-2">
             {navItems.map(n => (
-              <button key={n.key} onClick={() => { setOpen(false); onNavigate?.(n.key as any) }} className={`text-left ${navClass(n.key as any)}`}>
+              <button
+                key={n.key}
+                onClick={() => {
+                  if (n.requiresWhatsAppConfig && !isWhatsappConfigured) return
+                  setOpen(false)
+                  onNavigate?.(n.key as any)
+                }}
+                className={`text-left ${navClass(n.key as any)} ${n.requiresWhatsAppConfig && !isWhatsappConfigured ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={Boolean(n.requiresWhatsAppConfig && !isWhatsappConfigured)}
+                title={n.requiresWhatsAppConfig && !isWhatsappConfigured ? 'Configure o WhatsApp na aba Conta para liberar.' : undefined}
+              >
                 {n.label}
               </button>
             ))}

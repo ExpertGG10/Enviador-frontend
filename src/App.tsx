@@ -8,9 +8,10 @@ import { LoginPage } from './components/LoginPage'
 import { SignupPage } from './components/SignupPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import AccountPage from './components/AccountPage'
+import WhatsAppInboxPage from './components/WhatsAppInboxPage'
 
 export default function App() {
-  const [page, setPage] = useState<'home' | 'send' | 'account' | 'contact' | 'login' | 'signup'>('home')
+  const [page, setPage] = useState<'home' | 'send' | 'account' | 'contact' | 'whatsapp' | 'login' | 'signup'>('home')
 
   // Pages that don't require authentication
   const publicPages = ['home', 'login', 'signup']
@@ -40,6 +41,11 @@ export default function App() {
         {page === 'contact' && (
           <ProtectedRoute onNavigate={setPage}>
             <div>Contato (em breve)</div>
+          </ProtectedRoute>
+        )}
+        {page === 'whatsapp' && (
+          <ProtectedRoute onNavigate={setPage}>
+            <WhatsAppInboxPage onNavigate={setPage} />
           </ProtectedRoute>
         )}
       </main>
