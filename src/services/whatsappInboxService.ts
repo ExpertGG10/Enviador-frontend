@@ -11,15 +11,17 @@ export type WhatsAppConversationListItem = {
 }
 
 export type WhatsAppTimelineMessage = {
+  wa_id?: string
   message_id: string
   type: string
   text?: string
   timestamp: number
   datetime_iso: string
-  direction: string
+  direction: 'inbound' | 'outbound' | string
   phone_number_id: string
   display_phone_number: string
-  event_id: number
+  event_id: number | null
+  status?: string | null
 }
 
 export type WhatsAppTimelineItem = {
