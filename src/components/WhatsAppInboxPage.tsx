@@ -288,9 +288,6 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                         {message.status && (
                           <span className="rounded-full bg-white px-2 py-1">status: {message.status}</span>
                         )}
-                        {message.display_phone_number && (
-                          <span className="rounded-full bg-white px-2 py-1">número exibido: {message.display_phone_number}</span>
-                        )}
                       </div>
                     </article>
                   ))}
