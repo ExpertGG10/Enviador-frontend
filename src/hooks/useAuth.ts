@@ -8,10 +8,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   register: (
     username: string,
-    email: string,
-    password: string,
-    firstName?: string,
-    lastName?: string
+    password: string
   ) => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -62,20 +59,11 @@ export const useAuth = (): AuthContextType => {
   const register = useCallback(
     async (
       username: string,
-      email: string,
-      password: string,
-      firstName?: string,
-      lastName?: string
+      password: string
     ) => {
       setLoading(true);
       try {
-        const response = await authService.register(
-          username,
-          email,
-          password,
-          firstName,
-          lastName
-        );
+        const response = await authService.register(username, password);
         localStorage.setItem(STORAGE_KEY, response.token);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
         setToken(response.token);

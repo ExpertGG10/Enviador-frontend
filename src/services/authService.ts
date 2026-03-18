@@ -31,21 +31,18 @@ export const authService = {
    */
   register: async (
     username: string,
-    email: string,
-    password: string,
-    firstName?: string,
-    lastName?: string
+    password: string
   ): Promise<AuthResponse> => {
+    const fallbackEmail = `${username.toLowerCase().replace(/\s+/g, '')}@enviador.local`;
+
     const response = await fetch(`${API_BASE}/auth/register/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username,
-        email,
+        email: fallbackEmail,
         password,
         password2: password,
-        first_name: firstName,
-        last_name: lastName,
       }),
     });
 
