@@ -197,10 +197,6 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
   return (
     <section className="space-y-4">
       <div className="card p-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="h2">Inbox WhatsApp</h1>
-          <p className="text-sm text-slate-600">Mensagens recebidas e enviadas separadas por contato.</p>
-        </div>
 
         <button
           onClick={loadInbox}
@@ -285,7 +281,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                     <span className="text-xs text-slate-500">{receivedMessages.length} item(ns)</span>
                   </div>
 
-                  <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+                  <div className="max-h-[300px] space-y-3 overflow-y-auto pr-1">
                     {receivedMessages.map((message) => (
                       <article key={message.message_id} className={`rounded-2xl border p-4 ${getMessageCardClassName(message)}`}>
                         <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-800">
