@@ -72,8 +72,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         phoneNumber: '',
         accessToken: '',
         phoneNumberId: '',
-        businessId: '',
-        templates: []
+        businessId: ''
       })
     }
 
@@ -81,8 +80,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       phoneNumber: sender.phoneNumber,
       accessToken: sender.accessToken,
       phoneNumberId: sender.phoneNumberId,
-      businessId: sender.businessId,
-      templates: sender.templates.map(template => template.title)
+      businessId: sender.businessId
     })
   }, [])
   
@@ -95,7 +93,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   const [channel, setChannel] = useState<'whatsapp' | 'email' | 'none'>('none')
   const [message, setMessage] = useState<string>('')
   const [subject, setSubject] = useState<string>('')
-  const [selectedEmailSender, setSelectedEmailSender] = useState<string>(initialDraft?.selectedEmailSender || accountSettings.gmail.senderEmail)
+  const [selectedEmailSender, setSelectedEmailSender] = useState<string>(initialDraft?.selectedEmailSender || accountSettings.gmailSenders[0]?.senderEmail || '')
   const [selectedEmailTemplateTitle, setSelectedEmailTemplateTitle] = useState<string>('')
   const [selectedWhatsappSenderId, setSelectedWhatsappSenderId] = useState<string>(initialDraft?.selectedWhatsappSenderId || '')
   const [selectedWhatsappTemplateTitle, setSelectedWhatsappTemplateTitle] = useState<string>('')
@@ -158,11 +156,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     none: { bg: 'bg-blue-50', border: 'border-blue-200', accent: 'text-blue-600', btnClass: 'btn-primary' }
   } as const
   const currentTheme = themeMap[channel]
-  const activeWhatsappSender = accountSettings.whatsappSenders.find(sender =>
-    sender.phoneNumber === accountSettings.whatsapp.phoneNumber &&
-    sender.phoneNumberId === accountSettings.whatsapp.phoneNumberId &&
-    sender.businessId === accountSettings.whatsapp.businessId
-  )
+  const activeWhatsappSender = accountSettings.whatsappSenders[0] || null
   const configuredWhatsappSenders = React.useMemo(
     () => accountSettings.whatsappSenders.filter(sender => buildWhatsappStatus(sender).isConfigured),
     [accountSettings.whatsappSenders, buildWhatsappStatus]
@@ -178,7 +172,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     null
   const whatsappStatus = buildWhatsappStatus(effectiveWhatsappSender)
   const isWhatsappEnabled = configuredWhatsappSenders.length > 0
-  const isEmailEnabled = Boolean(accountSettings.gmail.senderEmail && accountSettings.gmail.appPassword)
+  const isEmailEnabled = accountSettings.gmailSenders.some(sender => Boolean(sender.senderEmail && sender.appPassword))
   const selectedEmailSenderRecord = accountSettings.gmailSenders.find(sender => sender.senderEmail === selectedEmailSender) || null
   const emailTemplates = selectedEmailSenderRecord?.templates || []
   const selectedEmailTemplate = emailTemplates.find(template => template.title === selectedEmailTemplateTitle) || null
@@ -207,14 +201,8 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       .then((loaded) => {
         if (!mounted) return
         setAccountSettings(loaded)
-        setSelectedEmailSender(prev => prev || loaded.gmail.senderEmail)
-
-        const activeSender = loaded.whatsappSenders.find(sender =>
-          sender.phoneNumber === loaded.whatsapp.phoneNumber &&
-          sender.phoneNumberId === loaded.whatsapp.phoneNumberId &&
-          sender.businessId === loaded.whatsapp.businessId
-        )
-        setSelectedWhatsappSenderId(prev => prev || activeSender?.id || loaded.whatsappSenders[0]?.id || '')
+        setSelectedEmailSender(prev => prev || loaded.gmailSenders[0]?.senderEmail || '')
+        setSelectedWhatsappSenderId(prev => prev || loaded.whatsappSenders[0]?.id || '')
       })
       .catch(() => {
       })
@@ -807,7 +795,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     if (channel === 'email') {
       payload.subject = subject
       payload.email_sender = selectedEmailSender
-      payload.app_password = accountSettings.gmail.appPassword
+      payload.app_password = selectedEmailSenderRecord?.appPassword || ''
       payload.email_template_title = selectedEmailTemplateTitle || null
     }
 

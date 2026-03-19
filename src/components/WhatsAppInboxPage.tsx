@@ -31,8 +31,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
       phoneNumber: sender.phoneNumber,
       accessToken: sender.accessToken,
       phoneNumberId: sender.phoneNumberId,
-      businessId: sender.businessId,
-      templates: []
+      businessId: sender.businessId
     })
   }, [])
 
@@ -104,13 +103,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     )
     const hasConfiguredSender = configuredSenders.length > 0
 
-    const activeSender = configuredSenders.find((sender) => (
-      sender.phoneNumber === settings.whatsapp.phoneNumber &&
-      sender.phoneNumberId === settings.whatsapp.phoneNumberId &&
-      sender.businessId === settings.whatsapp.businessId
-    ))
-
-    setSelectedSenderId(activeSender?.id || configuredSenders[0]?.id || '')
+    setSelectedSenderId(configuredSenders[0]?.id || '')
     setIsWhatsappConfigured(hasConfiguredSender)
     return hasConfiguredSender
   }, [getSenderConfigStatus])

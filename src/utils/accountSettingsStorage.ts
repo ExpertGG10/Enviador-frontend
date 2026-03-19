@@ -1,11 +1,6 @@
-import { AccountSettings, DEFAULT_ACCOUNT_SETTINGS, GmailSenderCard, MessageTemplate, WhatsAppSenderCard, WhatsAppSettings } from '../types/accountSettings'
+import { AccountSettings, DEFAULT_ACCOUNT_SETTINGS, GmailSenderCard, MessageTemplate, WhatsAppSenderCard } from '../types/accountSettings'
 
-const STORAGE_KEY = 'enviador_account_settings_v1'
-
-function sanitizeTemplates(templates: string[]): string[] {
-  const normalized = templates.map(t => t.trim()).filter(Boolean)
-  return Array.from(new Set(normalized))
-}
+const STORAGE_KEY = 'enviador_account_settings_v2'
 
 type LooseGmailSenderCard = Omit<Partial<GmailSenderCard>, 'templates'> & {
   templates?: Array<string | MessageTemplate>
@@ -51,28 +46,10 @@ function sanitizeGmailSenderCard(card: LooseGmailSenderCard): GmailSenderCard | 
   }
 }
 
-function sanitizeGmailSenders(cards: Array<Partial<GmailSenderCard>> | undefined, fallback: { senderEmail: string; appPassword: string }): GmailSenderCard[] {
-  const source = cards && cards.length > 0 ? cards : []
-  const normalized = source
+function sanitizeGmailSenders(cards: Array<Partial<GmailSenderCard>> | undefined): GmailSenderCard[] {
+  return (cards || [])
     .map(sanitizeGmailSenderCard)
     .filter((card): card is GmailSenderCard => Boolean(card))
-
-  const fallbackEmail = fallback.senderEmail.trim()
-  const fallbackPassword = fallback.appPassword
-  const canUseFallback = Boolean(fallbackEmail && fallbackPassword)
-
-  const hasActive = normalized.some(card => card.senderEmail === fallbackEmail)
-  if (canUseFallback && !hasActive) {
-    const active = sanitizeGmailSenderCard({
-      id: `active-gmail-${fallbackEmail || Date.now()}`,
-      senderEmail: fallbackEmail,
-      appPassword: fallbackPassword,
-      templates: []
-    })
-    if (active) normalized.unshift(active)
-  }
-
-  return normalized
 }
 
 function sanitizeWhatsappSenderCard(card: LooseWhatsappSenderCard): WhatsAppSenderCard | null {
@@ -94,56 +71,16 @@ function sanitizeWhatsappSenderCard(card: LooseWhatsappSenderCard): WhatsAppSend
   }
 }
 
-function sanitizeWhatsappSenders(cards: Array<Partial<WhatsAppSenderCard>> | undefined, fallback: WhatsAppSettings): WhatsAppSenderCard[] {
-  const source = cards && cards.length > 0 ? cards : []
-  const normalized = source
+function sanitizeWhatsappSenders(cards: Array<Partial<WhatsAppSenderCard>> | undefined): WhatsAppSenderCard[] {
+  return (cards || [])
     .map(sanitizeWhatsappSenderCard)
     .filter((card): card is WhatsAppSenderCard => Boolean(card))
-
-  const hasActive = normalized.some(card =>
-    card.phoneNumber === fallback.phoneNumber &&
-    card.phoneNumberId === fallback.phoneNumberId &&
-    card.businessId === fallback.businessId
-  )
-
-  if (!hasActive) {
-    const activeCard = sanitizeWhatsappSenderCard({
-      id: `active-${fallback.phoneNumberId || fallback.phoneNumber || Date.now()}`,
-      phoneNumber: fallback.phoneNumber,
-      accessToken: fallback.accessToken,
-      phoneNumberId: fallback.phoneNumberId,
-      businessId: fallback.businessId,
-      templates: fallback.templates
-    })
-    if (activeCard) normalized.unshift(activeCard)
-  }
-
-  return normalized
 }
 
 function normalizeSettings(input: Partial<AccountSettings> | null | undefined): AccountSettings {
-  const gmail = {
-    senderEmail: input?.gmail?.senderEmail?.trim() || '',
-    appPassword: input?.gmail?.appPassword || ''
-  }
-
   return {
-    gmail,
-    gmailSenders: sanitizeGmailSenders(input?.gmailSenders, gmail),
-    whatsapp: {
-      phoneNumber: input?.whatsapp?.phoneNumber?.trim() || '',
-      accessToken: input?.whatsapp?.accessToken?.trim() || '',
-      phoneNumberId: input?.whatsapp?.phoneNumberId?.trim() || '',
-      businessId: input?.whatsapp?.businessId?.trim() || '',
-      templates: sanitizeTemplates(input?.whatsapp?.templates || [])
-    },
-    whatsappSenders: sanitizeWhatsappSenders(input?.whatsappSenders, {
-      phoneNumber: input?.whatsapp?.phoneNumber?.trim() || '',
-      accessToken: input?.whatsapp?.accessToken?.trim() || '',
-      phoneNumberId: input?.whatsapp?.phoneNumberId?.trim() || '',
-      businessId: input?.whatsapp?.businessId?.trim() || '',
-      templates: sanitizeTemplates(input?.whatsapp?.templates || [])
-    })
+    gmailSenders: sanitizeGmailSenders(input?.gmailSenders),
+    whatsappSenders: sanitizeWhatsappSenders(input?.whatsappSenders)
   }
 }
 
@@ -170,7 +107,7 @@ export function saveAccountSettings(settings: AccountSettings): AccountSettings 
   return normalized
 }
 
-export function getWhatsAppConfigStatus(whatsapp: WhatsAppSettings): { isConfigured: boolean; missingFields: string[] } {
+export function getWhatsAppConfigStatus(whatsapp: Pick<WhatsAppSenderCard, 'phoneNumber' | 'accessToken' | 'phoneNumberId' | 'businessId'>): { isConfigured: boolean; missingFields: string[] } {
   const missingFields: string[] = []
 
   if (!whatsapp.phoneNumber.trim()) missingFields.push('Número de telefone')
