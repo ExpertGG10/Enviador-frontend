@@ -24,12 +24,14 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
   const getSenderConfigStatus = React.useCallback((sender: {
     phoneNumber: string
     accessToken: string
+    accessTokenMasked?: string
     phoneNumberId: string
     businessId: string
   }) => {
     return getWhatsAppConfigStatus({
       phoneNumber: sender.phoneNumber,
       accessToken: sender.accessToken,
+      accessTokenMasked: sender.accessTokenMasked,
       phoneNumberId: sender.phoneNumberId,
       businessId: sender.businessId
     })

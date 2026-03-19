@@ -15,6 +15,7 @@ export interface WhatsAppSenderCard {
   id: string
   phoneNumber: string
   accessToken: string
+  accessTokenMasked?: string
   phoneNumberId: string
   businessId: string
   templates: MessageTemplate[]

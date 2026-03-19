@@ -56,16 +56,18 @@ function sanitizeGmailSenders(cards: Array<Partial<GmailSenderCard>> | undefined
 function sanitizeWhatsappSenderCard(card: LooseWhatsappSenderCard): WhatsAppSenderCard | null {
   const phoneNumber = card.phoneNumber?.trim() || ''
   const accessToken = card.accessToken?.trim() || ''
+  const accessTokenMasked = card.accessTokenMasked?.trim() || ''
   const phoneNumberId = card.phoneNumberId?.trim() || ''
   const businessId = card.businessId?.trim() || ''
   const templates = sanitizeCardTemplates(card.templates)
 
-  if (!phoneNumber && !accessToken && !phoneNumberId && !businessId && templates.length === 0) return null
+  if (!phoneNumber && !accessToken && !accessTokenMasked && !phoneNumberId && !businessId && templates.length === 0) return null
 
   return {
     id: card.id?.trim() || `${phoneNumber || 'sender'}-${phoneNumberId || Date.now()}`,
     phoneNumber,
     accessToken,
+    accessTokenMasked: accessTokenMasked || undefined,
     phoneNumberId,
     businessId,
     templates: sanitizeCardTemplates(card.templates)
@@ -109,11 +111,12 @@ export function saveAccountSettings(settings: AccountSettings): AccountSettings 
   return normalized
 }
 
-export function getWhatsAppConfigStatus(whatsapp: Pick<WhatsAppSenderCard, 'phoneNumber' | 'accessToken' | 'phoneNumberId' | 'businessId'>): { isConfigured: boolean; missingFields: string[] } {
+export function getWhatsAppConfigStatus(whatsapp: Pick<WhatsAppSenderCard, 'phoneNumber' | 'accessToken' | 'phoneNumberId' | 'businessId' | 'accessTokenMasked'>): { isConfigured: boolean; missingFields: string[] } {
   const missingFields: string[] = []
+  const accessTokenValue = whatsapp.accessToken.trim() || whatsapp.accessTokenMasked?.trim() || ''
 
   if (!whatsapp.phoneNumber.trim()) missingFields.push('Número de telefone')
-  if (!whatsapp.accessToken.trim()) missingFields.push('Token de acesso')
+  if (!accessTokenValue) missingFields.push('Token de acesso')
   if (!whatsapp.phoneNumberId.trim()) missingFields.push('Phone Number ID')
   if (!whatsapp.businessId.trim()) missingFields.push('Business ID')
 

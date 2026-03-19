@@ -63,6 +63,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   const buildWhatsappStatus = React.useCallback((sender: {
     phoneNumber: string
     accessToken: string
+    accessTokenMasked?: string
     phoneNumberId: string
     businessId: string
     templates: Array<{ title: string }>
@@ -79,6 +80,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     return getWhatsAppConfigStatus({
       phoneNumber: sender.phoneNumber,
       accessToken: sender.accessToken,
+      accessTokenMasked: sender.accessTokenMasked,
       phoneNumberId: sender.phoneNumberId,
       businessId: sender.businessId
     })

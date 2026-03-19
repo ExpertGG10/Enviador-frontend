@@ -643,7 +643,7 @@ export default function AccountPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1">
                         <div><span className="text-slate-500">Número:</span> <span className="font-medium text-slate-900">{sender.phoneNumber}</span></div>
-                        <div><span className="text-slate-500">Access Token:</span> <span className="font-medium text-slate-900">{maskSecret(sender.accessToken)}</span></div>
+                        <div><span className="text-slate-500">Access Token:</span> <span className="font-medium text-slate-900">{sender.accessTokenMasked || maskSecret(sender.accessToken)}</span></div>
                         <div><span className="text-slate-500">Phone Number ID:</span> <span className="font-medium text-slate-900">{sender.phoneNumberId}</span></div>
                         <div><span className="text-slate-500">Business ID:</span> <span className="font-medium text-slate-900">{sender.businessId}</span></div>
                       </div>
