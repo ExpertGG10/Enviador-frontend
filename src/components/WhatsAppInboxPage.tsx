@@ -198,13 +198,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     <section className="space-y-4">
       <div className="card p-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 
-        <button
-          onClick={loadInbox}
-          className="btn btn-ghost"
-          disabled={isLoadingInbox}
-        >
-          {isLoadingInbox ? 'Carregando...' : 'Atualizar inbox'}
-        </button>
+        
       </div>
 
       {error && (
@@ -261,6 +255,13 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
           </aside>
 
           <section className="card p-4 md:p-6">
+            <button
+          onClick={loadInbox}
+          className="btn btn-ghost"
+          disabled={isLoadingInbox}
+        >
+          {isLoadingInbox ? 'Carregando...' : 'Atualizar inbox'}
+        </button>
             {selectedConversation ? (
               <>
                 <div className="border-b border-slate-200 pb-4">
