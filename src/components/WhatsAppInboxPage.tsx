@@ -57,9 +57,9 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     return conversations.find((conversation) => conversation.wa_id === selectedWaId) || conversations[0]
   }, [conversations, selectedWaId])
 
-  const receivedMessages = React.useMemo(() => {
+  const conversationMessages = React.useMemo(() => {
     if (!selectedConversation) return []
-    return selectedConversation.messages.filter((message) => message.direction !== 'outbound')
+    return selectedConversation.messages
   }, [selectedConversation])
 
   const formatMessagePreview = React.useCallback((message: { type: string; text?: string }) => {
@@ -254,33 +254,14 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
             
             {selectedConversation ? (
               <>
-                <div className="border-b border-slate-200 pb-4">
-                  <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-slate-900">{selectedConversation.contactName}</h2>
-                      <p className="text-sm text-slate-500">{selectedConversation.wa_id}</p>
-                    </div>
-                    <div className="text-sm text-slate-500">
-                      {selectedConversation.messages.length} mensagem(ns) na conversa
-                    </div>
-                  </div>
-                  <button
-          onClick={loadInbox}
-          className="btn btn-ghost"
-          disabled={isLoadingInbox}
-        >
-          {isLoadingInbox ? 'Carregando...' : 'Atualizar inbox'}
-        </button>
-                </div>
-
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-900">Mensagens recebidas</h3>
-                    <span className="text-xs text-slate-500">{receivedMessages.length} item(ns)</span>
+                    <h3 className="text-sm font-semibold text-slate-900">Mensagens da conversa</h3>
+                    <span className="text-xs text-slate-500">{conversationMessages.length} item(ns)</span>
                   </div>
 
                   <div className="max-h-[300px] space-y-3 overflow-y-auto pr-1">
-                    {receivedMessages.map((message) => (
+                    {conversationMessages.map((message) => (
                       <article key={message.message_id} className={`rounded-2xl border p-4 ${getMessageCardClassName(message)}`}>
                         <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-800">
                           {formatMessagePreview(message)}
@@ -299,9 +280,9 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                       </article>
                     ))}
 
-                    {receivedMessages.length === 0 && (
+                    {conversationMessages.length === 0 && (
                       <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-                        Este contato ainda não possui mensagens recebidas no payload atual.
+                        Este contato não possui mensagens no payload atual.
                       </div>
                     )}
                   </div>
