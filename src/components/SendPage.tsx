@@ -801,10 +801,6 @@ export default function SendPage({ onNavigate }: SendPageProps) {
 
     if (channel === 'whatsapp') {
       payload.whatsapp_sender_id = effectiveWhatsappSender?.id || null
-      payload.phone_number = effectiveWhatsappSender?.phoneNumber || ''
-      payload.whatsapp_access_token = effectiveWhatsappSender?.accessToken || ''
-      payload.whatsapp_phone_number_id = effectiveWhatsappSender?.phoneNumberId || ''
-      payload.whatsapp_business_id = effectiveWhatsappSender?.businessId || ''
       payload.whatsapp_template_title = selectedWhatsappTemplateTitle
       payload.whatsapp_template_variables = whatsappTemplateVariables.map(variable => {
         const binding = whatsappVariableBindings[variable] || { mode: 'fixed', column: '', value: '' }

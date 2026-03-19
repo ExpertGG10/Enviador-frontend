@@ -3,7 +3,7 @@ import logoUrl from '../assets/logo.svg'
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { accountSettingsService } from '../services/accountSettingsService'
-import { getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
+import { ACCOUNT_SETTINGS_UPDATED_EVENT, getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
 
 type HeaderProps = {
   onNavigate?: (page: 'home' | 'send' | 'account' | 'contact' | 'whatsapp' | 'login' | 'signup') => void
@@ -19,9 +19,12 @@ type NavItem = {
 export default function Header({ onNavigate, currentPage = 'home' }: HeaderProps) {
   const [open, setOpen] = useState(false)
   const { user, isAuthenticated, logout, token } = useAuth()
-  const [isWhatsappConfigured, setIsWhatsappConfigured] = useState(() => {
+  const resolveWhatsappConfig = React.useCallback(() => {
     const settings = accountSettingsService.getCachedSettings()
     return settings.whatsappSenders.some((sender) => getWhatsAppConfigStatus(sender).isConfigured)
+  }, [])
+  const [isWhatsappConfigured, setIsWhatsappConfigured] = useState(() => {
+    return resolveWhatsappConfig()
   })
 
   React.useEffect(() => {
@@ -41,15 +44,28 @@ export default function Header({ onNavigate, currentPage = 'home' }: HeaderProps
       })
       .catch(() => {
         if (!mounted) return
-        const cached = accountSettingsService.getCachedSettings()
-        const hasConfiguredSender = cached.whatsappSenders.some((sender) => getWhatsAppConfigStatus(sender).isConfigured)
-        setIsWhatsappConfigured(hasConfiguredSender)
+        setIsWhatsappConfigured(resolveWhatsappConfig())
       })
+
+    const handleSettingsUpdated = () => {
+      if (!mounted) return
+      setIsWhatsappConfigured(resolveWhatsappConfig())
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key && event.key !== 'enviador_account_settings_v2') return
+      handleSettingsUpdated()
+    }
+
+    window.addEventListener(ACCOUNT_SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
+    window.addEventListener('storage', handleStorage)
 
     return () => {
       mounted = false
+      window.removeEventListener(ACCOUNT_SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
+      window.removeEventListener('storage', handleStorage)
     }
-  }, [isAuthenticated, token])
+  }, [isAuthenticated, resolveWhatsappConfig, token])
 
   const navItems: NavItem[] = [
     { key: 'home', label: 'Início' },
