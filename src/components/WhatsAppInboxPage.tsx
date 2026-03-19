@@ -17,6 +17,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
   const [error, setError] = React.useState('')
   const [inboxData, setInboxData] = React.useState<WhatsAppInboxResponse | null>(null)
   const [selectedWaId, setSelectedWaId] = React.useState('')
+  const [selectedSenderId, setSelectedSenderId] = React.useState('')
   const [outgoingMessage, setOutgoingMessage] = React.useState('')
   const [sendFeedback, setSendFeedback] = React.useState('')
 
@@ -98,9 +99,18 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
 
   const resolveConfigStatus = React.useCallback(() => {
     const settings = accountSettingsService.getCachedSettings()
-    const hasConfiguredSender = settings.whatsappSenders.some((sender) =>
+    const configuredSenders = settings.whatsappSenders.filter((sender) =>
       getSenderConfigStatus(sender).isConfigured
     )
+    const hasConfiguredSender = configuredSenders.length > 0
+
+    const activeSender = configuredSenders.find((sender) => (
+      sender.phoneNumber === settings.whatsapp.phoneNumber &&
+      sender.phoneNumberId === settings.whatsapp.phoneNumberId &&
+      sender.businessId === settings.whatsapp.businessId
+    ))
+
+    setSelectedSenderId(activeSender?.id || configuredSenders[0]?.id || '')
     setIsWhatsappConfigured(hasConfiguredSender)
     return hasConfiguredSender
   }, [getSenderConfigStatus])
@@ -140,13 +150,9 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
       setError('')
 
       try {
-        const settings = await accountSettingsService.getSettings(token)
+        await accountSettingsService.getSettings(token)
         if (!mounted) return
-
-        const hasConfiguredSender = settings.whatsappSenders.some((sender) =>
-          getSenderConfigStatus(sender).isConfigured
-        )
-        setIsWhatsappConfigured(hasConfiguredSender)
+        resolveConfigStatus()
       } catch {
         if (!mounted) return
         const hasConfiguredSender = resolveConfigStatus()
@@ -161,7 +167,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     return () => {
       mounted = false
     }
-  }, [getSenderConfigStatus, resolveConfigStatus, token])
+  }, [resolveConfigStatus, token])
 
   React.useEffect(() => {
     if (!token || isLoadingConfig || !isWhatsappConfigured) return
@@ -177,6 +183,12 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     event.preventDefault()
 
     const text = outgoingMessage.trim()
+
+    if (!selectedSenderId) {
+      setSendFeedback('Nenhum remetente WhatsApp ativo foi encontrado para esta conta.')
+      return
+    }
+
     if (!token || !selectedConversation || !text) return
 
     setIsSendingMessage(true)
@@ -184,6 +196,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
 
     try {
       await whatsappInboxService.sendTextMessage(token, {
+        sender_id: selectedSenderId,
         wa_id: selectedConversation.wa_id,
         text
       })
@@ -196,7 +209,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     } finally {
       setIsSendingMessage(false)
     }
-  }, [loadInbox, outgoingMessage, selectedConversation, token])
+  }, [loadInbox, outgoingMessage, selectedConversation, selectedSenderId, token])
 
   if (isLoadingConfig) {
     return (
@@ -336,7 +349,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                     <button
                       type="submit"
                       className="btn btn-primary"
-                      disabled={!outgoingMessage.trim() || isSendingMessage || isLoadingInbox}
+                      disabled={!outgoingMessage.trim() || !selectedSenderId || isSendingMessage || isLoadingInbox}
                     >
                       {isSendingMessage ? 'Enviando...' : 'Enviar'}
                     </button>

@@ -47,6 +47,7 @@ export type WhatsAppInboxResponse = {
 }
 
 export type WhatsAppSendTextPayload = {
+  sender_id: string
   wa_id: string
   text: string
 }
