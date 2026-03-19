@@ -93,7 +93,7 @@ export default function AccountPage() {
     setTemplateContentInput('')
   }
 
-  function handleAddTemplateToSender(channel: 'gmail' | 'whatsapp', senderId: string) {
+  async function handleAddTemplateToSender(channel: 'gmail' | 'whatsapp', senderId: string) {
     const title = templateTitleInput.trim()
     const subject = templateSubjectInput.trim()
     const content = templateContentInput.trim()
@@ -108,6 +108,8 @@ export default function AccountPage() {
       return
     }
 
+    let next: AccountSettings
+
     if (channel === 'gmail') {
       const nextGmailSenders = settings.gmailSenders.map(sender => {
         if (sender.id !== senderId) return sender
@@ -117,51 +119,74 @@ export default function AccountPage() {
         ]
         return { ...sender, templates: nextTemplates }
       })
+      next = { ...settings, gmailSenders: nextGmailSenders }
+    } else {
+      const nextWhatsappSenders = settings.whatsappSenders.map(sender => {
+        if (sender.id !== senderId) return sender
+        const nextTemplates = [
+          ...sender.templates.filter(template => template.title !== title),
+          { title, content }
+        ]
+        return { ...sender, templates: nextTemplates }
+      })
+      next = { ...settings, whatsappSenders: nextWhatsappSenders }
+    }
 
-      setSettings(prev => saveAccountSettings({ ...prev, gmailSenders: nextGmailSenders }))
+    if (!token) {
+      setSettings(saveAccountSettings(next))
       closeTemplateEditor()
       return
     }
 
-    const nextWhatsappSenders = settings.whatsappSenders.map(sender => {
-      if (sender.id !== senderId) return sender
-      const nextTemplates = [
-        ...sender.templates.filter(template => template.title !== title),
-        { title, content }
-      ]
-      return { ...sender, templates: nextTemplates }
-    })
-
-    setSettings(prev => saveAccountSettings({
-      ...prev,
-      whatsappSenders: nextWhatsappSenders
-    }))
-
-    closeTemplateEditor()
+    setIsSaving(true)
+    setApiMessage('')
+    try {
+      const saved = await accountSettingsService.saveSettings(token, next)
+      setSettings(saveAccountSettings(saved))
+      closeTemplateEditor()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao salvar template.'
+      setApiMessage(message)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  function handleDeleteTemplateFromSender(channel: 'gmail' | 'whatsapp', senderId: string, templateTitle: string) {
+  async function handleDeleteTemplateFromSender(channel: 'gmail' | 'whatsapp', senderId: string, templateTitle: string) {
+    let next: AccountSettings
+
     if (channel === 'gmail') {
       const nextGmailSenders = settings.gmailSenders.map(sender =>
         sender.id === senderId
           ? { ...sender, templates: sender.templates.filter(template => template.title !== templateTitle) }
           : sender
       )
+      next = { ...settings, gmailSenders: nextGmailSenders }
+    } else {
+      const nextWhatsappSenders = settings.whatsappSenders.map(sender =>
+        sender.id === senderId
+          ? { ...sender, templates: sender.templates.filter(template => template.title !== templateTitle) }
+          : sender
+      )
+      next = { ...settings, whatsappSenders: nextWhatsappSenders }
+    }
 
-      setSettings(prev => saveAccountSettings({ ...prev, gmailSenders: nextGmailSenders }))
+    if (!token) {
+      setSettings(saveAccountSettings(next))
       return
     }
 
-    const nextWhatsappSenders = settings.whatsappSenders.map(sender =>
-      sender.id === senderId
-        ? { ...sender, templates: sender.templates.filter(template => template.title !== templateTitle) }
-        : sender
-    )
-
-    setSettings(prev => saveAccountSettings({
-      ...prev,
-      whatsappSenders: nextWhatsappSenders
-    }))
+    setIsSaving(true)
+    setApiMessage('')
+    try {
+      const saved = await accountSettingsService.saveSettings(token, next)
+      setSettings(saveAccountSettings(saved))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao excluir template.'
+      setApiMessage(message)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   async function handleSaveGmail(e: React.FormEvent) {
