@@ -16,6 +16,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
   const [error, setError] = React.useState('')
   const [inboxData, setInboxData] = React.useState<WhatsAppInboxResponse | null>(null)
   const [selectedWaId, setSelectedWaId] = React.useState('')
+  const [outgoingMessage, setOutgoingMessage] = React.useState('')
 
   const getSenderConfigStatus = React.useCallback((sender: {
     phoneNumber: string
@@ -55,6 +56,11 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     if (conversations.length === 0) return null
     return conversations.find((conversation) => conversation.wa_id === selectedWaId) || conversations[0]
   }, [conversations, selectedWaId])
+
+  const receivedMessages = React.useMemo(() => {
+    if (!selectedConversation) return []
+    return selectedConversation.messages.filter((message) => message.direction !== 'outbound')
+  }, [selectedConversation])
 
   const formatMessagePreview = React.useCallback((message: { type: string; text?: string }) => {
     if (message.type === 'text') {
@@ -159,6 +165,10 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     if (!token || isLoadingConfig || !isWhatsappConfigured) return
     loadInbox()
   }, [isLoadingConfig, isWhatsappConfigured, loadInbox, token])
+
+  React.useEffect(() => {
+    setOutgoingMessage('')
+  }, [selectedWaId])
 
   if (isLoadingConfig) {
     return (
@@ -269,35 +279,71 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-3">
-                  {selectedConversation.messages.map((message) => (
-                    <article key={message.message_id} className={`rounded-2xl border p-4 ${getMessageCardClassName(message)}`}>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
-                          {getMessageDirectionLabel(message.direction)}
-                        </span>
-                        <time className="text-xs text-slate-400">{formatDateTime(message.datetime_iso)}</time>
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-900">Mensagens recebidas</h3>
+                    <span className="text-xs text-slate-500">{receivedMessages.length} item(ns)</span>
+                  </div>
+
+                  <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+                    {receivedMessages.map((message) => (
+                      <article key={message.message_id} className={`rounded-2xl border p-4 ${getMessageCardClassName(message)}`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                            {getMessageDirectionLabel(message.direction)}
+                          </span>
+                          <time className="text-xs text-slate-400">{formatDateTime(message.datetime_iso)}</time>
+                        </div>
+
+                        <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-800">
+                          {formatMessagePreview(message)}
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                          <span className="rounded-full bg-white px-2 py-1">tipo: {message.type}</span>
+                          {message.status && (
+                            <span className="rounded-full bg-white px-2 py-1">status: {message.status}</span>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+
+                    {receivedMessages.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
+                        Este contato ainda não possui mensagens recebidas no payload atual.
                       </div>
-
-                      <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-800">
-                        {formatMessagePreview(message)}
-                      </p>
-
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-                        <span className="rounded-full bg-white px-2 py-1">tipo: {message.type}</span>
-                        {message.status && (
-                          <span className="rounded-full bg-white px-2 py-1">status: {message.status}</span>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-
-                  {selectedConversation.messages.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-                      Este contato não possui mensagens no payload atual.
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
+
+                <form
+                  className="mt-4 border-t border-slate-200 pt-4"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    if (!outgoingMessage.trim()) return
+                    setOutgoingMessage('')
+                  }}
+                >
+                  <label htmlFor="wa-outgoing-message" className="text-sm font-semibold text-slate-900">
+                    Enviar mensagem
+                  </label>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id="wa-outgoing-message"
+                      type="text"
+                      value={outgoingMessage}
+                      onChange={(event) => setOutgoingMessage(event.target.value)}
+                      placeholder="Digite a mensagem para este contato"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                    />
+                    <button type="submit" className="btn btn-primary" disabled={!outgoingMessage.trim()}>
+                      Enviar
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Campo pronto para integração com o endpoint de envio do WhatsApp.
+                  </p>
+                </form>
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
