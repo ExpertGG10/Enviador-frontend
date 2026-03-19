@@ -46,6 +46,11 @@ export type WhatsAppInboxResponse = {
   }
 }
 
+export type WhatsAppSendTextPayload = {
+  wa_id: string
+  text: string
+}
+
 async function parseError(response: Response): Promise<string> {
   try {
     const json = await response.json()
@@ -71,5 +76,20 @@ export const whatsappInboxService = {
     }
 
     return (await response.json()) as WhatsAppInboxResponse
+  },
+
+  async sendTextMessage(token: string, payload: WhatsAppSendTextPayload): Promise<void> {
+    const response = await fetch(`${API_BASE}/notifications/whatsapp/send-text/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      throw new Error(await parseError(response))
+    }
   }
 }

@@ -13,10 +13,12 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
   const [isWhatsappConfigured, setIsWhatsappConfigured] = React.useState(false)
   const [isLoadingConfig, setIsLoadingConfig] = React.useState(true)
   const [isLoadingInbox, setIsLoadingInbox] = React.useState(false)
+  const [isSendingMessage, setIsSendingMessage] = React.useState(false)
   const [error, setError] = React.useState('')
   const [inboxData, setInboxData] = React.useState<WhatsAppInboxResponse | null>(null)
   const [selectedWaId, setSelectedWaId] = React.useState('')
   const [outgoingMessage, setOutgoingMessage] = React.useState('')
+  const [sendFeedback, setSendFeedback] = React.useState('')
 
   const getSenderConfigStatus = React.useCallback((sender: {
     phoneNumber: string
@@ -168,7 +170,33 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
 
   React.useEffect(() => {
     setOutgoingMessage('')
+    setSendFeedback('')
   }, [selectedWaId])
+
+  const handleSendMessage = React.useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const text = outgoingMessage.trim()
+    if (!token || !selectedConversation || !text) return
+
+    setIsSendingMessage(true)
+    setSendFeedback('')
+
+    try {
+      await whatsappInboxService.sendTextMessage(token, {
+        wa_id: selectedConversation.wa_id,
+        text
+      })
+      setOutgoingMessage('')
+      setSendFeedback('Mensagem enviada com sucesso.')
+      await loadInbox()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Não foi possível enviar a mensagem de WhatsApp.'
+      setSendFeedback(message)
+    } finally {
+      setIsSendingMessage(false)
+    }
+  }, [loadInbox, outgoingMessage, selectedConversation, token])
 
   if (isLoadingConfig) {
     return (
@@ -290,11 +318,7 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
 
                 <form
                   className="mt-4 border-t border-slate-200 pt-4"
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    if (!outgoingMessage.trim()) return
-                    setOutgoingMessage('')
-                  }}
+                  onSubmit={handleSendMessage}
                 >
                   <label htmlFor="wa-outgoing-message" className="text-sm font-semibold text-slate-900">
                     Enviar mensagem
@@ -307,14 +331,19 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                       onChange={(event) => setOutgoingMessage(event.target.value)}
                       placeholder="Digite a mensagem para este contato"
                       className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                      disabled={isSendingMessage}
                     />
-                    <button type="submit" className="btn btn-primary" disabled={!outgoingMessage.trim()}>
-                      Enviar
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={!outgoingMessage.trim() || isSendingMessage || isLoadingInbox}
+                    >
+                      {isSendingMessage ? 'Enviando...' : 'Enviar'}
                     </button>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Campo pronto para integração com o endpoint de envio do WhatsApp.
-                  </p>
+                  {sendFeedback && (
+                    <p className="mt-2 text-xs text-slate-600">{sendFeedback}</p>
+                  )}
                 </form>
               </>
             ) : (
