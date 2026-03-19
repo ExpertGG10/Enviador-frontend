@@ -134,13 +134,18 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
   }, [resolveConfigStatus, token])
 
   React.useEffect(() => {
-    if (!token) return
-
     let mounted = true
 
     const loadConfig = async () => {
       setIsLoadingConfig(true)
       setError('')
+
+      if (!token) {
+        if (!mounted) return
+        resolveConfigStatus()
+        setIsLoadingConfig(false)
+        return
+      }
 
       try {
         await accountSettingsService.getSettings(token)

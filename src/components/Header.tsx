@@ -28,24 +28,9 @@ export default function Header({ onNavigate, currentPage = 'home' }: HeaderProps
   })
 
   React.useEffect(() => {
-    if (!token || !isAuthenticated) {
-      setIsWhatsappConfigured(false)
-      return
-    }
-
     let mounted = true
 
-    accountSettingsService
-      .getSettings(token)
-      .then((settings) => {
-        if (!mounted) return
-        const hasConfiguredSender = settings.whatsappSenders.some((sender) => getWhatsAppConfigStatus(sender).isConfigured)
-        setIsWhatsappConfigured(hasConfiguredSender)
-      })
-      .catch(() => {
-        if (!mounted) return
-        setIsWhatsappConfigured(resolveWhatsappConfig())
-      })
+    setIsWhatsappConfigured(resolveWhatsappConfig())
 
     const handleSettingsUpdated = () => {
       if (!mounted) return
@@ -59,6 +44,26 @@ export default function Header({ onNavigate, currentPage = 'home' }: HeaderProps
 
     window.addEventListener(ACCOUNT_SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
     window.addEventListener('storage', handleStorage)
+
+    if (!token || !isAuthenticated) {
+      return () => {
+        mounted = false
+        window.removeEventListener(ACCOUNT_SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
+        window.removeEventListener('storage', handleStorage)
+      }
+    }
+
+    accountSettingsService
+      .getSettings(token)
+      .then((settings) => {
+        if (!mounted) return
+        const hasConfiguredSender = settings.whatsappSenders.some((sender) => getWhatsAppConfigStatus(sender).isConfigured)
+        setIsWhatsappConfigured(hasConfiguredSender)
+      })
+      .catch(() => {
+        if (!mounted) return
+        setIsWhatsappConfigured(resolveWhatsappConfig())
+      })
 
     return () => {
       mounted = false
