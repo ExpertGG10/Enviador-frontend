@@ -288,13 +288,6 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                   <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
                     {receivedMessages.map((message) => (
                       <article key={message.message_id} className={`rounded-2xl border p-4 ${getMessageCardClassName(message)}`}>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
-                            {getMessageDirectionLabel(message.direction)}
-                          </span>
-                          <time className="text-xs text-slate-400">{formatDateTime(message.datetime_iso)}</time>
-                        </div>
-
                         <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-800">
                           {formatMessagePreview(message)}
                         </p>
@@ -304,6 +297,10 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                           {message.status && (
                             <span className="rounded-full bg-white px-2 py-1">status: {message.status}</span>
                           )}
+                          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                            {getMessageDirectionLabel(message.direction)}
+                          </span>
+                          <time className="text-xs text-slate-400">{formatDateTime(message.datetime_iso)}</time>
                         </div>
                       </article>
                     ))}
