@@ -322,7 +322,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       setMessage('')
       return
     }
-    setMessage(selectedWhatsappTemplate.content)
+    setMessage(selectedWhatsappTemplate.title)
   }, [channel, selectedWhatsappTemplate])
 
   useEffect(() => {
@@ -803,6 +803,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
 
     if (channel === 'whatsapp') {
       payload.whatsapp_sender_id = effectiveWhatsappSender?.id || null
+      payload.message = selectedWhatsappTemplateTitle
       payload.whatsapp_template_title = selectedWhatsappTemplateTitle
       payload.whatsapp_template_variables = whatsappTemplateVariables.map(variable => {
         const binding = whatsappVariableBindings[variable] || { mode: 'fixed', column: '', value: '' }
@@ -1019,7 +1020,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
                 ))}
               </select>
               <div className="text-xs text-slate-500 mt-1">
-                As variáveis serão exibidas após selecionar uma template.
+                Selecione o título da template já cadastrada e aprovada na Meta.
               </div>
             </div>
           </div>
@@ -1043,7 +1044,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         headers={headers}
         message={message}
         readOnly={channel === 'whatsapp'}
-        readOnlyHint={channel === 'whatsapp' ? 'Para WhatsApp, selecione a template e configure as variáveis abaixo.' : ''}
+        readOnlyHint={channel === 'whatsapp' ? 'Para WhatsApp, este campo reflete o título da template selecionada. Conteúdo e variáveis ficam na configuração da Meta.' : ''}
         theme={currentTheme}
         onMessageChange={setMessage}
         onInsertPlaceholder={insertPlaceholder}
@@ -1056,7 +1057,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
           {!selectedWhatsappTemplate ? (
             <p className="text-sm text-slate-500">Selecione uma template na seção de canal para configurar variáveis.</p>
           ) : whatsappTemplateVariables.length === 0 ? (
-            <p className="text-sm text-slate-500">A template selecionada não possui variáveis.</p>
+            <p className="text-sm text-slate-500">Nesta etapa, a integração usa apenas o título da template. Se houver variáveis, elas ainda não são configuradas por esta tela.</p>
           ) : (
             <div className="space-y-3">
               {whatsappTemplateVariables.map(variable => {

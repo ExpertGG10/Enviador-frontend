@@ -98,14 +98,21 @@ export default function AccountPage() {
     const subject = templateSubjectInput.trim()
     const content = templateContentInput.trim()
 
-    if (!title || !content) {
-      setApiMessage('Informe título e conteúdo do template.')
+    if (!title) {
+      setApiMessage(channel === 'gmail' ? 'Informe título e conteúdo do template.' : 'Informe o título do template do WhatsApp.')
       return
     }
 
-    if (channel === 'gmail' && !subject) {
-      setApiMessage('No template de email, o campo assunto é obrigatório.')
-      return
+    if (channel === 'gmail') {
+      if (!content) {
+        setApiMessage('Informe título e conteúdo do template.')
+        return
+      }
+
+      if (!subject) {
+        setApiMessage('No template de email, o campo assunto é obrigatório.')
+        return
+      }
     }
 
     let next: AccountSettings
@@ -125,7 +132,7 @@ export default function AccountPage() {
         if (sender.id !== senderId) return sender
         const nextTemplates = [
           ...sender.templates.filter(template => template.title !== title),
-          { title, content }
+          { title, content: '' }
         ]
         return { ...sender, templates: nextTemplates }
       })
@@ -465,6 +472,7 @@ export default function AccountPage() {
 
   function renderTemplateSection(channel: 'gmail' | 'whatsapp', senderId: string, templates: Array<{ title: string; content: string; subject?: string }>) {
     const isEditingThisCard = templateTarget?.channel === channel && templateTarget.senderId === senderId
+    const isWhatsapp = channel === 'whatsapp'
 
     return (
       <div className="mt-3 rounded-lg border border-slate-200 bg-white/80 p-3 space-y-2">
@@ -475,9 +483,15 @@ export default function AccountPage() {
             className="btn btn-ghost"
             onClick={() => (isEditingThisCard ? closeTemplateEditor() : openTemplateEditor(channel, senderId))}
           >
-            {isEditingThisCard ? 'Cancelar template' : 'Adicionar template'}
+            {isEditingThisCard ? 'Cancelar template' : isWhatsapp ? 'Adicionar template da Meta' : 'Adicionar template'}
           </button>
         </div>
+
+        {isWhatsapp && (
+          <p className="text-xs text-slate-500">
+            Para WhatsApp, este sistema salva apenas o título exato da template já aprovada na Meta.
+          </p>
+        )}
 
         {templates.length > 0 ? (
           <div className="space-y-2">
@@ -487,13 +501,15 @@ export default function AccountPage() {
                 {channel === 'gmail' && (
                   <p className="mt-2 text-sm text-slate-700"><span className="font-medium">Assunto:</span> {template.subject || 'Sem assunto.'}</p>
                 )}
-                {template.content ? (
+                {channel === 'gmail' && template.content ? (
                   <div
                     className="mt-2 text-sm text-slate-600 whitespace-pre-wrap"
                     dangerouslySetInnerHTML={{ __html: template.content }}
                   />
-                ) : (
+                ) : channel === 'gmail' ? (
                   <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">Sem conteúdo.</p>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-600">Template referenciada pelo título. Conteúdo e variáveis são gerenciados na Meta.</p>
                 )}
                 <button
                   type="button"
@@ -515,24 +531,31 @@ export default function AccountPage() {
               type="text"
               value={templateTitleInput}
               onChange={(e) => setTemplateTitleInput(e.target.value)}
-              placeholder="Título do template"
+              placeholder={isWhatsapp ? 'Nome exato da template cadastrada na Meta' : 'Título do template'}
               className="input w-full"
             />
             {channel === 'gmail' && (
-              <input
-                type="text"
-                value={templateSubjectInput}
-                onChange={(e) => setTemplateSubjectInput(e.target.value)}
-                placeholder="Assunto do email"
-                className="input w-full"
-              />
+              <>
+                <input
+                  type="text"
+                  value={templateSubjectInput}
+                  onChange={(e) => setTemplateSubjectInput(e.target.value)}
+                  placeholder="Assunto do email"
+                  className="input w-full"
+                />
+                <RichTextInput
+                  value={templateContentInput}
+                  onChange={setTemplateContentInput}
+                  placeholder="Digite ou cole aqui um texto formatado (Ctrl+V com negrito, listas, etc.)"
+                  minHeightClassName="min-h-[110px]"
+                />
+              </>
             )}
-            <RichTextInput
-              value={templateContentInput}
-              onChange={setTemplateContentInput}
-              placeholder="Digite ou cole aqui um texto formatado (Ctrl+V com negrito, listas, etc.)"
-              minHeightClassName="min-h-[110px]"
-            />
+            {isWhatsapp && (
+              <p className="text-xs text-slate-500">
+                O corpo da mensagem não é cadastrado aqui. Informe apenas o título da template existente na plataforma da Meta.
+              </p>
+            )}
             <button type="button" className="btn btn-primary" onClick={() => handleAddTemplateToSender(channel, senderId)}>
               Salvar template
             </button>
