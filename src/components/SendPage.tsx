@@ -153,9 +153,9 @@ export default function SendPage({ onNavigate }: SendPageProps) {
 
   // Theme mapping
   const themeMap = {
-    whatsapp: { bg: 'bg-green-50', border: 'border-green-200', accent: 'text-green-600', btnClass: 'btn-success' },
-    email: { bg: 'bg-red-50', border: 'border-red-200', accent: 'text-red-600', btnClass: 'btn-danger' },
-    none: { bg: 'bg-blue-50', border: 'border-blue-200', accent: 'text-blue-600', btnClass: 'btn-primary' }
+    whatsapp: { bg: 'bg-green-50', border: 'border-green-200', accent: 'text-green-600', btnClass: 'btn-whatsapp' },
+    email:    { bg: 'bg-red-50',   border: 'border-red-200',   accent: 'text-red-600',   btnClass: 'btn-gmail'    },
+    none:     { bg: 'bg-blue-50',  border: 'border-blue-200',  accent: 'text-blue-600',  btnClass: 'btn-primary'  }
   } as const
   const currentTheme = themeMap[channel]
   const activeWhatsappSender = accountSettings.whatsappSenders[0] || null
@@ -860,10 +860,10 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         <div>
           <div className="text-sm font-medium mb-1">Canal</div>
           <div className="flex gap-2">
-            <label className={`btn ${channel === 'whatsapp' ? 'btn-success' : 'btn-ghost'} ${!isWhatsappEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <label className={`btn ${channel === 'whatsapp' ? 'btn-whatsapp' : 'btn-ghost'} ${!isWhatsappEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <input className="hidden" type="radio" name="channel" checked={channel === 'whatsapp'} disabled={!isWhatsappEnabled} onChange={() => setChannel('whatsapp')} /> WhatsApp
             </label>
-            <label className={`btn ${channel === 'email' ? 'btn-danger' : 'btn-ghost'} ${!isEmailEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <label className={`btn ${channel === 'email' ? 'btn-gmail' : 'btn-ghost'} ${!isEmailEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <input className="hidden" type="radio" name="channel" checked={channel === 'email'} disabled={!isEmailEnabled} onChange={() => setChannel('email')} /> Email
             </label>
           </div>

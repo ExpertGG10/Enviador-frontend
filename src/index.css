@@ -2,11 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Design tokens ──────────────────────────────────────────── */
 :root {
   --bg: #f8fafc;
   --muted: #64748b;
 }
 
+/* ─── Base layout ────────────────────────────────────────────── */
 html, body, #root {
   height: 100%;
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
@@ -14,31 +16,54 @@ html, body, #root {
   color: #0f172a;
 }
 
-/* container */
 .container {
   max-width: 1100px;
 }
 
-/* cards & buttons */
+/* ─── Card & inputs ──────────────────────────────────────────── */
 .card {
   @apply bg-white rounded-xl shadow-sm border;
 }
+
 .input {
-  @apply border rounded-md px-3 py-2;
+  @apply bg-white border border-slate-300 rounded-md px-3 py-2
+         text-slate-900 placeholder:text-slate-400
+         focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400
+         transition-colors;
 }
+
+/* ─── Buttons — base ─────────────────────────────────────────── */
 .btn {
-  @apply inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium;
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium
+         transition-colors cursor-pointer select-none;
 }
-.btn-primary { @apply bg-indigo-600 text-white hover:bg-indigo-700; }
-.btn-ghost { @apply bg-transparent border text-slate-700 hover:bg-slate-50; }
-.btn-danger { @apply bg-red-600 text-white hover:bg-red-700; }
-.btn-success { @apply bg-green-600 text-white hover:bg-green-700; }
 
-/* subtle headings */
-.h1 { @apply text-3xl md:text-4xl font-extrabold tracking-tight; }
-.h2 { @apply text-2xl font-semibold; }
+/* size modifiers */
+.btn-sm { @apply px-3 py-1.5 text-sm; }
+
+/* ─── Buttons — generic intent ───────────────────────────────── */
+.btn-primary     { @apply bg-indigo-600 text-white hover:bg-indigo-700; }
+.btn-ghost       { @apply bg-transparent border border-slate-300 text-slate-700 hover:bg-slate-50; }
+.btn-outline     { @apply bg-transparent border border-current hover:bg-white/20; }
+.btn-destructive { @apply bg-red-50 text-red-700 border border-red-200 hover:bg-red-100; }
+
+/* ─── Buttons — brand / channel ──────────────────────────────── */
+/* WhatsApp brand (#25D366 / #128C7E) */
+.btn-whatsapp { @apply bg-[#25D366] text-white hover:bg-[#1DA851]; }
+
+/* Gmail / Google brand (#EA4335 / #C62717) */
+.btn-gmail    { @apply bg-[#EA4335] text-white hover:bg-[#C62717]; }
+
+/* ─── Form utilities ─────────────────────────────────────────── */
+.form-label { @apply block text-sm font-medium text-slate-700 mb-1; }
+
+/* ─── Badge / status ─────────────────────────────────────────── */
+.badge-success { @apply text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-1; }
+.badge-warning { @apply text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2; }
+
+/* ─── Typography helpers ─────────────────────────────────────── */
+.h1     { @apply text-3xl md:text-4xl font-extrabold tracking-tight; }
+.h2     { @apply text-2xl font-semibold; }
 .kicker { @apply uppercase text-xs text-slate-500 tracking-wider; }
-
-/* small helpers */
-.subtle { @apply text-sm text-slate-500 }
+.subtle { @apply text-sm text-slate-500; }
 

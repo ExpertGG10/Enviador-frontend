@@ -473,6 +473,7 @@ export default function AccountPage() {
   function renderTemplateSection(channel: 'gmail' | 'whatsapp', senderId: string, templates: Array<{ title: string; content: string; subject?: string }>) {
     const isEditingThisCard = templateTarget?.channel === channel && templateTarget.senderId === senderId
     const isWhatsapp = channel === 'whatsapp'
+    const channelBtnClass = isWhatsapp ? 'btn-whatsapp' : 'btn-gmail'
 
     return (
       <div className="mt-3 rounded-lg border border-slate-200 bg-white/80 p-3 space-y-2">
@@ -513,7 +514,7 @@ export default function AccountPage() {
                 )}
                 <button
                   type="button"
-                  className="btn btn-ghost mt-2"
+                  className="btn btn-destructive btn-sm mt-2"
                   onClick={() => handleDeleteTemplateFromSender(channel, senderId, template.title)}
                 >
                   Excluir template
@@ -556,7 +557,7 @@ export default function AccountPage() {
                 O corpo da mensagem não é cadastrado aqui. Informe apenas o título da template existente na plataforma da Meta.
               </p>
             )}
-            <button type="button" className="btn btn-primary" onClick={() => handleAddTemplateToSender(channel, senderId)}>
+            <button type="button" className={`btn ${channelBtnClass}`} onClick={() => handleAddTemplateToSender(channel, senderId)}>
               Salvar template
             </button>
           </div>
@@ -573,7 +574,7 @@ export default function AccountPage() {
           Configure e visualize as credenciais de Gmail e WhatsApp Business para habilitar o envio.
         </p>
         {isLoading && <p className="text-sm text-slate-500 mt-2">Carregando configurações da conta...</p>}
-        {apiMessage && <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-2">{apiMessage}</p>}
+        {apiMessage && <p className="badge-warning mt-2">{apiMessage}</p>}
       </div>
 
       <div className="card p-6 space-y-4 bg-red-50/80 border-2 border-red-300 shadow-sm">
@@ -582,7 +583,7 @@ export default function AccountPage() {
             <h3 className="text-lg font-semibold text-slate-900">Gmail</h3>
             <p className="text-sm text-slate-600">Configuração usada para envios por email.</p>
           </div>
-          {gmailSaved && <span className="text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-1">Configuração salva</span>}
+          {gmailSaved && <span className="badge-success">Configuração salva</span>}
         </div>
         <div className="rounded-lg border-2 border-red-300 bg-white/85 p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -625,15 +626,15 @@ export default function AccountPage() {
             <p className="text-sm text-slate-600">Nenhum remetente de Gmail cadastrado.</p>
           )}
 
-          <button type="button" className="btn btn-primary" onClick={handleCreateNewGmailSender}>
-            Adicionar remetente Gmail
+          <button type="button" className="btn btn-gmail" onClick={handleCreateNewGmailSender}>
+            Adicionar remetente
           </button>
         </div>
 
         {showGmailForm && (
           <form onSubmit={handleSaveGmail} className="space-y-3 border-2 border-red-300 rounded-lg p-4 bg-white/80">
             <div>
-              <label htmlFor="account-gmail-email" className="block text-sm font-medium text-gray-700 mb-1">Email remetente</label>
+              <label htmlFor="account-gmail-email" className="form-label">Email remetente</label>
               <input
                 id="account-gmail-email"
                 type="email"
@@ -645,7 +646,7 @@ export default function AccountPage() {
               />
             </div>
             <div>
-              <label htmlFor="account-gmail-password" className="block text-sm font-medium text-gray-700 mb-1">Senha de app Gmail</label>
+              <label htmlFor="account-gmail-password" className="form-label">Senha de app Gmail</label>
               <input
                 id="account-gmail-password"
                 name="account-gmail-password"
@@ -660,7 +661,7 @@ export default function AccountPage() {
                 Gere em: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="text-red-600 hover:underline">Google App Passwords</a>
               </p>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar Gmail'}</button>
+            <button type="submit" className="btn btn-gmail" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar Gmail'}</button>
           </form>
         )}
       </div>
@@ -671,7 +672,7 @@ export default function AccountPage() {
             <h3 className="text-lg font-semibold text-slate-900">WhatsApp Business</h3>
             <p className="text-sm text-slate-600">Somente templates aprovados pela Meta são aceitos para envio.</p>
           </div>
-          {whatsappSaved && <span className="text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-1">Cadastro salvo</span>}
+          {whatsappSaved && <span className="badge-success">Cadastro salvo</span>}
         </div>
         <div className="rounded-lg border-2 border-green-300 bg-white/85 p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -716,15 +717,15 @@ export default function AccountPage() {
             <p className="text-sm text-slate-600">Nenhum remetente de WhatsApp cadastrado.</p>
           )}
 
-          <button type="button" onClick={handleCreateNewWhatsAppSender} className="btn btn-primary">
-            Adicionar remetente WhatsApp
+          <button type="button" onClick={handleCreateNewWhatsAppSender} className="btn btn-whatsapp">
+            Adicionar remetente
           </button>
         </div>
 
         {showWhatsAppSenderForm && (
           <form onSubmit={handleSaveWhatsAppSender} className="space-y-3 border-2 border-green-300 rounded-lg p-4 bg-white/80">
             <div>
-              <label htmlFor="wa-phone-number" className="block text-sm font-medium text-gray-700 mb-1">Número de telefone</label>
+              <label htmlFor="wa-phone-number" className="form-label">Número de telefone</label>
               <input
                 id="wa-phone-number"
                 type="tel"
@@ -736,7 +737,7 @@ export default function AccountPage() {
             </div>
 
             <div>
-              <label htmlFor="wa-access-token" className="block text-sm font-medium text-gray-700 mb-1">Token de acesso</label>
+              <label htmlFor="wa-access-token" className="form-label">Token de acesso</label>
               <input
                 id="wa-access-token"
                 name="wa-access-token"
@@ -750,7 +751,7 @@ export default function AccountPage() {
             </div>
 
             <div>
-              <label htmlFor="wa-phone-number-id" className="block text-sm font-medium text-gray-700 mb-1">Phone Number ID</label>
+              <label htmlFor="wa-phone-number-id" className="form-label">Phone Number ID</label>
               <input
                 id="wa-phone-number-id"
                 type="text"
@@ -762,7 +763,7 @@ export default function AccountPage() {
             </div>
 
             <div>
-              <label htmlFor="wa-business-id" className="block text-sm font-medium text-gray-700 mb-1">Business ID</label>
+              <label htmlFor="wa-business-id" className="form-label">Business ID</label>
               <input
                 id="wa-business-id"
                 type="text"
@@ -773,7 +774,7 @@ export default function AccountPage() {
               />
             </div>
 
-            <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar remetente WhatsApp'}</button>
+            <button type="submit" className="btn btn-whatsapp" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar remetente WhatsApp'}</button>
           </form>
         )}
 
