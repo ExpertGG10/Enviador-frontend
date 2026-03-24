@@ -881,12 +881,14 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         const binding = whatsappVariableBindings[variable] || { mode: 'fixed', column: '', value: '' }
         if (binding.mode === 'column') {
           return {
+            name: variable,
             mode: 'column',
             column: binding.column
           }
         }
 
         return {
+          name: variable,
           mode: 'fixed',
           value: binding.value
         }
