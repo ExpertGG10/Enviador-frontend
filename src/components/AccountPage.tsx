@@ -31,13 +31,13 @@ export default function AccountPage() {
   const [phoneNumber, setPhoneNumber] = useState(activeWhatsAppSender?.phoneNumber || '')
   const [accessToken, setAccessToken] = useState(activeWhatsAppSender?.accessToken || '')
   const [phoneNumberId, setPhoneNumberId] = useState(activeWhatsAppSender?.phoneNumberId || '')
-  const [businessId, setBusinessId] = useState(activeWhatsAppSender?.businessId || '')
+  const [wabaId, setWabaId] = useState(activeWhatsAppSender?.wabaId || '')
 
   const whatsappStatus = useMemo(() => getWhatsAppConfigStatus(activeWhatsAppSender || {
     phoneNumber: '',
     accessToken: '',
     phoneNumberId: '',
-    businessId: ''
+    wabaId: ''
   }), [activeWhatsAppSender])
   const whatsappSenderConfigured = settings.whatsappSenders.length > 0
 
@@ -58,7 +58,7 @@ export default function AccountPage() {
         setPhoneNumber(loaded.whatsappSenders[0]?.phoneNumber || '')
         setAccessToken(loaded.whatsappSenders[0]?.accessToken || '')
         setPhoneNumberId(loaded.whatsappSenders[0]?.phoneNumberId || '')
-        setBusinessId(loaded.whatsappSenders[0]?.businessId || '')
+        setWabaId(loaded.whatsappSenders[0]?.wabaId || '')
       })
       .catch(() => {
         if (!mounted) return
@@ -301,7 +301,7 @@ export default function AccountPage() {
       phoneNumber: phoneNumber.trim(),
       accessToken: accessToken.trim(),
       phoneNumberId: phoneNumberId.trim(),
-      businessId: businessId.trim(),
+      wabaId: wabaId.trim(),
       templates: settings.whatsappSenders.find(sender => sender.id === editingWhatsAppSenderId)?.templates || []
     }
 
@@ -327,7 +327,7 @@ export default function AccountPage() {
       setPhoneNumber(merged.whatsappSenders[0]?.phoneNumber || '')
       setAccessToken(merged.whatsappSenders[0]?.accessToken || '')
       setPhoneNumberId(merged.whatsappSenders[0]?.phoneNumberId || '')
-      setBusinessId(merged.whatsappSenders[0]?.businessId || '')
+      setWabaId(merged.whatsappSenders[0]?.wabaId || '')
       setWhatsappSaved(true)
       setShowWhatsAppSenderForm(false)
       setEditingWhatsAppSenderId(null)
@@ -373,7 +373,7 @@ export default function AccountPage() {
       setPhoneNumber(merged.whatsappSenders[0]?.phoneNumber || '')
       setAccessToken(merged.whatsappSenders[0]?.accessToken || '')
       setPhoneNumberId(merged.whatsappSenders[0]?.phoneNumberId || '')
-      setBusinessId(merged.whatsappSenders[0]?.businessId || '')
+      setWabaId(merged.whatsappSenders[0]?.wabaId || '')
       setShowWhatsAppSenderForm(false)
       setEditingWhatsAppSenderId(null)
     } catch (error) {
@@ -389,7 +389,7 @@ export default function AccountPage() {
     setPhoneNumber('')
     setAccessToken('')
     setPhoneNumberId('')
-    setBusinessId('')
+    setWabaId('')
     setShowWhatsAppSenderForm(true)
   }
 
@@ -438,7 +438,7 @@ export default function AccountPage() {
     setPhoneNumber(sender.phoneNumber)
     setAccessToken(sender.accessToken)
     setPhoneNumberId(sender.phoneNumberId)
-    setBusinessId(sender.businessId)
+    setWabaId(sender.wabaId)
     setShowWhatsAppSenderForm(true)
   }
 
@@ -453,7 +453,7 @@ export default function AccountPage() {
     setPhoneNumber(sender.phoneNumber)
     setAccessToken(sender.accessToken)
     setPhoneNumberId(sender.phoneNumberId)
-    setBusinessId(sender.businessId)
+    setWabaId(sender.wabaId)
 
     if (!token) return
 
@@ -694,7 +694,7 @@ export default function AccountPage() {
                         <div><span className="text-slate-500">Número:</span> <span className="font-medium text-slate-900">{sender.phoneNumber}</span></div>
                         <div><span className="text-slate-500">Access Token:</span> <span className="font-medium text-slate-900">{sender.accessTokenMasked || maskSecret(sender.accessToken)}</span></div>
                         <div><span className="text-slate-500">Phone Number ID:</span> <span className="font-medium text-slate-900">{sender.phoneNumberId}</span></div>
-                        <div><span className="text-slate-500">Business ID:</span> <span className="font-medium text-slate-900">{sender.businessId}</span></div>
+                        <div><span className="text-slate-500">WABA ID:</span> <span className="font-medium text-slate-900">{sender.wabaId}</span></div>
                       </div>
                       <div className="flex items-center gap-1">
                         <button type="button" className="btn btn-ghost" onClick={() => handleSelectWhatsAppSender(sender)}>
@@ -763,13 +763,13 @@ export default function AccountPage() {
             </div>
 
             <div>
-              <label htmlFor="wa-business-id" className="form-label">Business ID</label>
+              <label htmlFor="wa-business-id" className="form-label">WABA ID</label>
               <input
                 id="wa-business-id"
                 type="text"
-                value={businessId}
-                onChange={(e) => setBusinessId(e.target.value)}
-                placeholder="Identificador do Business Manager"
+                value={wabaId}
+                onChange={(e) => setWabaId(e.target.value)}
+                placeholder="Identificador do WhatsApp Business Account"
                 className="input w-full"
               />
             </div>

@@ -61,7 +61,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     accessToken: string
     accessTokenMasked?: string
     phoneNumberId: string
-    businessId: string
+    wabaId: string
     templates: Array<{ title: string }>
   } | null) => {
     if (!sender) {
@@ -69,7 +69,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         phoneNumber: '',
         accessToken: '',
         phoneNumberId: '',
-        businessId: ''
+        wabaId: ''
       })
     }
 
@@ -78,7 +78,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       accessToken: sender.accessToken,
       accessTokenMasked: sender.accessTokenMasked,
       phoneNumberId: sender.phoneNumberId,
-      businessId: sender.businessId
+      wabaId: sender.wabaId
     })
   }, [])
   
