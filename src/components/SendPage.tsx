@@ -857,7 +857,6 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     
     const payload: any = {
       channel,
-      message,
       rows: rowsToSend.length > 0 ? rowsToSend : rows,
       contact_column: contactColumn,
       file_column: fileColumn || null,
@@ -866,6 +865,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     }
 
     if (channel === 'email') {
+      payload.message = message
       payload.subject = subject
       payload.email_sender = selectedEmailSender
       payload.app_password = selectedEmailSenderRecord?.appPassword || ''
@@ -874,15 +874,21 @@ export default function SendPage({ onNavigate }: SendPageProps) {
 
     if (channel === 'whatsapp') {
       payload.whatsapp_sender_id = effectiveWhatsappSender?.id || null
-      payload.message = selectedWhatsappTemplateTitle
       payload.whatsapp_template_title = selectedWhatsappTemplateTitle
+      payload.whatsapp_template_language_code = 'pt_BR'
+      payload.whatsapp_template_parameter_format = 'NAMED'
       payload.whatsapp_template_variables = whatsappTemplateVariables.map(variable => {
         const binding = whatsappVariableBindings[variable] || { mode: 'fixed', column: '', value: '' }
+        if (binding.mode === 'column') {
+          return {
+            mode: 'column',
+            column: binding.column
+          }
+        }
+
         return {
-          variable,
-          mode: binding.mode,
-          column: binding.mode === 'column' ? binding.column : null,
-          value: binding.mode === 'fixed' ? binding.value : null
+          mode: 'fixed',
+          value: binding.value
         }
       })
     }
