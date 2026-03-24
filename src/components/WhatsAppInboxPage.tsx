@@ -26,14 +26,14 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     accessToken: string
     accessTokenMasked?: string
     phoneNumberId: string
-    businessId: string
+    wabaId: string
   }) => {
     return getWhatsAppConfigStatus({
       phoneNumber: sender.phoneNumber,
       accessToken: sender.accessToken,
       accessTokenMasked: sender.accessTokenMasked,
       phoneNumberId: sender.phoneNumberId,
-      businessId: sender.businessId
+      wabaId: sender.wabaId
     })
   }, [])
 
