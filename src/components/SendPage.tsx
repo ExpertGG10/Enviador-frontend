@@ -9,18 +9,14 @@ import { DataTableSection } from './send-page/DataTableSection'
 import { AttachmentsSection } from './send-page/AttachmentsSection'
 import { MessageSection } from './send-page/MessageSection'
 import { ContactChannelSection } from './send-page/ContactChannelSection'
+import { WhatsAppTemplatePreviewSection, VariableBinding } from './send-page/WhatsAppTemplatePreviewSection'
 import { AttachmentWarningsModal } from './send-page/AttachmentWarningsModal'
 import { ColumnModals } from './send-page/ColumnModals'
 import { parseFile, headersEqual, type Row } from '../utils/fileUtils'
 import { getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
 import { accountSettingsService } from '../services/accountSettingsService'
+import { whatsappTemplateService } from '../services/whatsappTemplateService'
 import { AccountSettings } from '../types/accountSettings'
-
-type VariableBinding = {
-  mode: 'column' | 'fixed'
-  column: string
-  value: string
-}
 
 type SendDraft = {
   channel: 'whatsapp' | 'email' | 'none'
@@ -100,6 +96,16 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   const [selectedWhatsappSenderId, setSelectedWhatsappSenderId] = useState<string>(initialDraft?.selectedWhatsappSenderId || '')
   const [selectedWhatsappTemplateTitle, setSelectedWhatsappTemplateTitle] = useState<string>('')
   const [whatsappVariableBindings, setWhatsappVariableBindings] = useState<Record<string, VariableBinding>>(initialDraft?.whatsappVariableBindings || {})
+  const [whatsappTemplatePreview, setWhatsappTemplatePreview] = useState<{
+    name: string
+    language: string
+    header: string
+    body: string
+    footer: string
+    buttons: string[]
+  } | null>(null)
+  const [isWhatsappPreviewLoading, setIsWhatsappPreviewLoading] = useState<boolean>(false)
+  const [whatsappPreviewError, setWhatsappPreviewError] = useState<string | null>(null)
   
   // Attachments
   const [attachments, setAttachments] = useState<File[]>([])
@@ -181,17 +187,24 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   const whatsappTemplates = effectiveWhatsappSender?.templates || []
   const selectedWhatsappTemplate = whatsappTemplates.find(template => template.title === selectedWhatsappTemplateTitle) || null
   const whatsappTemplateVariables = React.useMemo(() => {
-    if (!selectedWhatsappTemplate) return [] as string[]
+    if (!whatsappTemplatePreview) return [] as string[]
 
     const vars = new Set<string>()
-    const curlyMatches = selectedWhatsappTemplate.content.matchAll(/\{([^{}]+)\}/g)
-    for (const match of curlyMatches) {
+    const searchableText = [
+      whatsappTemplatePreview.header,
+      whatsappTemplatePreview.body,
+      whatsappTemplatePreview.footer,
+      ...(whatsappTemplatePreview.buttons || [])
+    ].join('\n')
+
+    const matches = searchableText.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)
+    for (const match of matches) {
       const variable = match[1].trim()
       if (variable) vars.add(variable)
     }
 
     return Array.from(vars)
-  }, [selectedWhatsappTemplate])
+  }, [whatsappTemplatePreview])
 
   useEffect(() => {
     if (!token) return
@@ -324,6 +337,43 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     }
     setMessage(selectedWhatsappTemplate.title)
   }, [channel, selectedWhatsappTemplate])
+
+  useEffect(() => {
+    if (channel !== 'whatsapp') return
+    if (!token) return
+
+    if (!effectiveWhatsappSender?.id || !selectedWhatsappTemplateTitle) {
+      setWhatsappTemplatePreview(null)
+      setWhatsappPreviewError(null)
+      setIsWhatsappPreviewLoading(false)
+      return
+    }
+
+    let mounted = true
+    setIsWhatsappPreviewLoading(true)
+    setWhatsappPreviewError(null)
+
+    whatsappTemplateService
+      .getTemplatePreview(token, effectiveWhatsappSender.id, selectedWhatsappTemplateTitle)
+      .then((preview) => {
+        if (!mounted) return
+        setWhatsappTemplatePreview(preview)
+      })
+      .catch((error: unknown) => {
+        if (!mounted) return
+        const errorMessage = error instanceof Error ? error.message : 'Erro ao carregar preview da template.'
+        setWhatsappTemplatePreview(null)
+        setWhatsappPreviewError(errorMessage)
+      })
+      .finally(() => {
+        if (!mounted) return
+        setIsWhatsappPreviewLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [channel, token, effectiveWhatsappSender?.id, selectedWhatsappTemplateTitle])
 
   useEffect(() => {
     if (channel !== 'whatsapp') return
@@ -486,6 +536,16 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     if (phoneColumn === columnName) setPhoneColumn('')
     if (emailColumn === columnName) setEmailColumn('')
     if (fileColumn === columnName) setFileColumn('')
+    setWhatsappVariableBindings(prev => {
+      const next = { ...prev }
+      Object.keys(next).forEach(variable => {
+        const binding = next[variable]
+        if (binding.mode === 'column' && binding.column === columnName) {
+          next[variable] = { ...binding, column: '' }
+        }
+      })
+      return next
+    })
   }
 
   function renameColumn(oldName: string, newName: string) {
@@ -509,6 +569,16 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     if (phoneColumn === oldName) setPhoneColumn(newName)
     if (emailColumn === oldName) setEmailColumn(newName)
     if (fileColumn === oldName) setFileColumn(newName)
+    setWhatsappVariableBindings(prev => {
+      const next = { ...prev }
+      Object.keys(next).forEach(variable => {
+        const binding = next[variable]
+        if (binding.mode === 'column' && binding.column === oldName) {
+          next[variable] = { ...binding, column: newName }
+        }
+      })
+      return next
+    })
     setEditingColumn(null)
     setNewColumnName('')
   }
@@ -593,12 +663,13 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       }
 
       const missingColumnBinding = whatsappTemplateVariables.find(variable => {
-        const binding = whatsappVariableBindings[variable]
-        return binding?.mode === 'column' && !binding.column
+        const binding = whatsappVariableBindings[variable] || { mode: 'column' as const, column: '', value: '' }
+        if (binding.mode === 'column') return !binding.column
+        return binding.value.trim().length === 0
       })
 
       if (missingColumnBinding) {
-        setErrorModal({ title: 'Variável sem vínculo', message: `Selecione uma coluna para a variável "${missingColumnBinding}" ou altere para valor fixo.` })
+        setErrorModal({ title: 'Variável sem vínculo', message: `Configure a variável "{{${missingColumnBinding}}}" com uma coluna ou valor fixo antes de enviar.` })
         return
       }
     }
@@ -996,6 +1067,8 @@ export default function SendPage({ onNavigate }: SendPageProps) {
                 onChange={e => {
                   setSelectedWhatsappSenderId(e.target.value)
                   setSelectedWhatsappTemplateTitle('')
+                  setWhatsappTemplatePreview(null)
+                  setWhatsappPreviewError(null)
                   setWhatsappVariableBindings({})
                 }}
                 className="input w-full"
@@ -1011,7 +1084,11 @@ export default function SendPage({ onNavigate }: SendPageProps) {
               <div className="text-sm font-medium mb-1">Template WhatsApp</div>
               <select
                 value={selectedWhatsappTemplateTitle}
-                onChange={e => setSelectedWhatsappTemplateTitle(e.target.value)}
+                onChange={e => {
+                  setSelectedWhatsappTemplateTitle(e.target.value)
+                  setWhatsappTemplatePreview(null)
+                  setWhatsappPreviewError(null)
+                }}
                 className="input w-full"
               >
                 <option value="">Selecione a template...</option>
@@ -1044,95 +1121,29 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         headers={headers}
         message={message}
         readOnly={channel === 'whatsapp'}
-        readOnlyHint={channel === 'whatsapp' ? 'Para WhatsApp, este campo reflete o título da template selecionada. Conteúdo e variáveis ficam na configuração da Meta.' : ''}
+        readOnlyHint={channel === 'whatsapp' ? 'Para WhatsApp, este campo usa o nome da template selecionada. A prévia e as variáveis ficam no bloco "Template WhatsApp".' : ''}
         theme={currentTheme}
         onMessageChange={setMessage}
         onInsertPlaceholder={insertPlaceholder}
       />
 
       {channel === 'whatsapp' && (
-        <div className={`mb-4 p-4 rounded ${currentTheme.bg} border ${currentTheme.border} space-y-3`}>
-          <h3 className="font-medium">Variáveis da template WhatsApp</h3>
-
-          {!selectedWhatsappTemplate ? (
-            <p className="text-sm text-slate-500">Selecione uma template na seção de canal para configurar variáveis.</p>
-          ) : whatsappTemplateVariables.length === 0 ? (
-            <p className="text-sm text-slate-500">Nesta etapa, a integração usa apenas o título da template. Se houver variáveis, elas ainda não são configuradas por esta tela.</p>
-          ) : (
-            <div className="space-y-3">
-              {whatsappTemplateVariables.map(variable => {
-                const binding = whatsappVariableBindings[variable] || { mode: 'column' as const, column: '', value: '' }
-                return (
-                  <div key={variable} className="rounded border border-green-200 bg-white p-3">
-                    <div className="text-sm font-medium text-slate-800 mb-2">{`{${variable}}`}</div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <select
-                        value={binding.mode}
-                        onChange={e => {
-                          const mode = e.target.value as 'column' | 'fixed'
-                          setWhatsappVariableBindings(prev => ({
-                            ...prev,
-                            [variable]: {
-                              ...prev[variable],
-                              mode,
-                              column: mode === 'column' ? prev[variable]?.column || '' : '',
-                              value: mode === 'fixed' ? prev[variable]?.value || '' : ''
-                            }
-                          }))
-                        }}
-                        className="input"
-                      >
-                        <option value="column">Vincular com coluna</option>
-                        <option value="fixed">Valor fixo</option>
-                      </select>
-
-                      {binding.mode === 'column' ? (
-                        <select
-                          value={binding.column}
-                          onChange={e => {
-                            const column = e.target.value
-                            setWhatsappVariableBindings(prev => ({
-                              ...prev,
-                              [variable]: {
-                                ...prev[variable],
-                                mode: 'column',
-                                column
-                              }
-                            }))
-                          }}
-                          className="input md:col-span-2"
-                        >
-                          <option value="">Selecione a coluna</option>
-                          {headers.map(header => (
-                            <option key={header} value={header}>{header}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          value={binding.value}
-                          onChange={e => {
-                            const value = e.target.value
-                            setWhatsappVariableBindings(prev => ({
-                              ...prev,
-                              [variable]: {
-                                ...prev[variable],
-                                mode: 'fixed',
-                                value
-                              }
-                            }))
-                          }}
-                          placeholder="Digite o valor fixo"
-                          className="input md:col-span-2"
-                        />
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        <WhatsAppTemplatePreviewSection
+          preview={whatsappTemplatePreview}
+          variables={whatsappTemplateVariables}
+          headers={headers}
+          bindings={whatsappVariableBindings}
+          isLoading={isWhatsappPreviewLoading}
+          error={whatsappPreviewError}
+          selectedTemplateTitle={selectedWhatsappTemplateTitle}
+          theme={currentTheme}
+          onBindingChange={(variable, binding) => {
+            setWhatsappVariableBindings(prev => ({
+              ...prev,
+              [variable]: binding
+            }))
+          }}
+        />
       )}
 
       
