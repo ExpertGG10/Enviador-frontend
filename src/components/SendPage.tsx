@@ -1117,15 +1117,15 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         </div>
       )}
 
-      <MessageSection
-        headers={headers}
-        message={message}
-        readOnly={channel === 'whatsapp'}
-        readOnlyHint={channel === 'whatsapp' ? 'Para WhatsApp, este campo usa o nome da template selecionada. A prévia e as variáveis ficam no bloco "Template WhatsApp".' : ''}
-        theme={currentTheme}
-        onMessageChange={setMessage}
-        onInsertPlaceholder={insertPlaceholder}
-      />
+      {channel !== 'whatsapp' && (
+        <MessageSection
+          headers={headers}
+          message={message}
+          theme={currentTheme}
+          onMessageChange={setMessage}
+          onInsertPlaceholder={insertPlaceholder}
+        />
+      )}
 
       {channel === 'whatsapp' && (
         <WhatsAppTemplatePreviewSection
