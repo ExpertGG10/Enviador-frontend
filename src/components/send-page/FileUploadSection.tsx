@@ -35,7 +35,7 @@ export function FileUploadSection({ theme, onFilesSelected, onManualCreate, onCl
           Criar manualmente
         </button>
         <button onClick={onClear} className="btn btn-ghost">
-          a
+          Limpar 
         </button>
         {hasData && (
           <button onClick={onSaveList} className={`btn ${theme.btnClass}`}>
