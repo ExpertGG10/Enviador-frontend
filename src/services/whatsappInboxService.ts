@@ -10,6 +10,24 @@ export type WhatsAppConversationListItem = {
   unread_count: number
 }
 
+export type WhatsAppMediaInfo = {
+  asset_id: number
+  media_type: string
+  mime_type: string
+  status: 'ready' | 'pending' | 'failed' | string
+}
+
+export type WhatsAppMediaUrlResponse = {
+  asset_id: number
+  status: 'ready' | 'pending' | 'failed' | string
+  media_type?: string
+  mime_type?: string
+  url?: string
+  file_size_bytes?: number
+  whatsapp_message_id?: string
+  error?: string
+}
+
 export type WhatsAppTimelineMessage = {
   wa_id?: string
   message_id: string
@@ -22,6 +40,7 @@ export type WhatsAppTimelineMessage = {
   display_phone_number: string
   event_id: number | null
   status?: string | null
+  media?: WhatsAppMediaInfo
 }
 
 export type WhatsAppTimelineItem = {
@@ -92,5 +111,21 @@ export const whatsappInboxService = {
     if (!response.ok) {
       throw new Error(await parseError(response))
     }
+  },
+
+  async getMediaUrl(token: string, assetId: number): Promise<WhatsAppMediaUrlResponse> {
+    const response = await fetch(`${API_BASE}/notifications/whatsapp/media/${assetId}/`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      return (await response.json()) as WhatsAppMediaUrlResponse
+    }
+
+    return (await response.json()) as WhatsAppMediaUrlResponse
   }
 }

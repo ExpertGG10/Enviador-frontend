@@ -20,6 +20,8 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
   const [selectedSenderId, setSelectedSenderId] = React.useState('')
   const [outgoingMessage, setOutgoingMessage] = React.useState('')
   const [sendFeedback, setSendFeedback] = React.useState('')
+  const [mediaUrls, setMediaUrls] = React.useState<Record<string, string>>({})
+  const [loadingMediaAssets, setLoadingMediaAssets] = React.useState<Set<string>>(new Set())
 
   const getSenderConfigStatus = React.useCallback((sender: {
     phoneNumber: string
@@ -97,6 +99,56 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
 
     return 'border-slate-200 bg-slate-50'
   }, [])
+
+  const renderMessageMedia = React.useCallback((message: WhatsAppTimelineMessage) => {
+    if (!message.media) return null
+
+    const assetId = String(message.media.asset_id)
+    const isLoading = loadingMediaAssets.has(assetId)
+    const mediaUrl = mediaUrls[assetId]
+    const isFailed = message.media.status === 'failed'
+
+    if (isLoading) {
+      return (
+        <div className="mt-2 rounded-lg bg-slate-100 p-3 text-center">
+          <p className="text-xs text-slate-600">Carregando mídia...</p>
+        </div>
+      )
+    }
+
+    if (isFailed) {
+      return (
+        <div className="mt-2 rounded-lg bg-red-100 p-3 text-center">
+          <p className="text-xs text-red-700">Falha ao carregar a mídia</p>
+        </div>
+      )
+    }
+
+    if (mediaUrl && message.media.media_type === 'image') {
+      return (
+        <div className="mt-2">
+          <img
+            src={mediaUrl}
+            alt="Imagem da conversa"
+            className="max-w-xs rounded-lg"
+            onError={() => {
+              console.error(`Erro ao carregar imagem: ${mediaUrl}`)
+            }}
+          />
+        </div>
+      )
+    }
+
+    if (message.media.media_type === 'image' && !mediaUrl) {
+      return (
+        <div className="mt-2 rounded-lg bg-slate-100 p-3 text-center">
+          <p className="text-xs text-slate-600">Aguardando disponibilidade da imagem...</p>
+        </div>
+      )
+    }
+
+    return null
+  }, [loadingMediaAssets, mediaUrls])
 
   const resolveConfigStatus = React.useCallback(() => {
     const settings = accountSettingsService.getCachedSettings()
@@ -178,6 +230,47 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     setOutgoingMessage('')
     setSendFeedback('')
   }, [selectedWaId])
+
+  const loadMediaUrls = React.useCallback(async (messages: WhatsAppTimelineMessage[]) => {
+    if (!token) return
+
+    const mediaMessagesWithAssetId = messages.filter(
+      (msg) => msg.media?.asset_id && msg.media?.status !== 'failed'
+    )
+
+    for (const message of mediaMessagesWithAssetId) {
+      const assetId = message.media?.asset_id
+      if (!assetId || mediaUrls[String(assetId)]) continue
+
+      const assetIdStr = String(assetId)
+      setLoadingMediaAssets((prev) => new Set(prev).add(assetIdStr))
+
+      try {
+        const mediaData = await whatsappInboxService.getMediaUrl(token, assetId)
+        if (mediaData.status === 'ready' && mediaData.url) {
+          const url = mediaData.url
+          setMediaUrls((prev) => ({
+            ...prev,
+            [assetIdStr]: url
+          }))
+        }
+      } catch (err) {
+        console.error(`Erro ao carregar mídia ${assetId}:`, err)
+      } finally {
+        setLoadingMediaAssets((prev) => {
+          const next = new Set(prev)
+          next.delete(assetIdStr)
+          return next
+        })
+      }
+    }
+  }, [token, mediaUrls])
+
+  React.useEffect(() => {
+    if (conversationMessages.length > 0) {
+      loadMediaUrls(conversationMessages)
+    }
+  }, [conversationMessages, loadMediaUrls])
 
   const handleSendMessage = React.useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -307,6 +400,8 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                         <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-800">
                           {formatMessagePreview(message)}
                         </p>
+
+                        {renderMessageMedia(message)}
 
                         <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
                           <span className="rounded-full bg-white px-2 py-1">tipo: {message.type}</span>
