@@ -117,7 +117,7 @@ export const whatsappInboxService = {
     const response = await fetch(`${API_BASE}/notifications/whatsapp/media/${assetId}/`, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Token ${token}`,  // ← Mude de "Bearer" para "Token"
         Accept: 'application/json'
       }
     })
