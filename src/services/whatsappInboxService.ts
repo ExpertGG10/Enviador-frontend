@@ -33,6 +33,7 @@ export type WhatsAppTimelineMessage = {
   message_id: string
   type: string
   text?: string
+  caption?: string
   timestamp: number
   datetime_iso: string
   direction: 'inbound' | 'outbound' | string

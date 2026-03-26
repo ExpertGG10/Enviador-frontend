@@ -68,12 +68,11 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     return selectedConversation.messages
   }, [selectedConversation])
 
-  const formatMessagePreview = React.useCallback((message: { type: string; text?: string }) => {
-    if (message.type === 'text') {
-      const value = message.text?.trim()
-      return value || '{text}'
-    }
+  const formatMessagePreview = React.useCallback((message: { type: string; text?: string; caption?: string }) => {
+    const value = (message.caption || message.text || '').trim()
+    if (value) return value
 
+    if (message.type === 'text') return '{text}'
     return `{${message.type}}`
   }, [])
 
