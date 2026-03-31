@@ -58,10 +58,10 @@ function sanitizeWhatsappSenderCard(card: LooseWhatsappSenderCard): WhatsAppSend
   const accessToken = card.accessToken?.trim() || ''
   const accessTokenMasked = card.accessTokenMasked?.trim() || ''
   const phoneNumberId = card.phoneNumberId?.trim() || ''
-  const businessId = card.businessId?.trim() || ''
+  const wabaId = card.wabaId?.trim() || ''
   const templates = sanitizeCardTemplates(card.templates)
 
-  if (!phoneNumber && !accessToken && !accessTokenMasked && !phoneNumberId && !businessId && templates.length === 0) return null
+  if (!phoneNumber && !accessToken && !accessTokenMasked && !phoneNumberId && !wabaId && templates.length === 0) return null
 
   return {
     id: card.id?.trim() || `${phoneNumber || 'sender'}-${phoneNumberId || Date.now()}`,
@@ -69,7 +69,7 @@ function sanitizeWhatsappSenderCard(card: LooseWhatsappSenderCard): WhatsAppSend
     accessToken,
     accessTokenMasked: accessTokenMasked || undefined,
     phoneNumberId,
-    businessId,
+    wabaId,
     templates: sanitizeCardTemplates(card.templates)
   }
 }
@@ -111,14 +111,14 @@ export function saveAccountSettings(settings: AccountSettings): AccountSettings 
   return normalized
 }
 
-export function getWhatsAppConfigStatus(whatsapp: Pick<WhatsAppSenderCard, 'phoneNumber' | 'accessToken' | 'phoneNumberId' | 'businessId' | 'accessTokenMasked'>): { isConfigured: boolean; missingFields: string[] } {
+export function getWhatsAppConfigStatus(whatsapp: Pick<WhatsAppSenderCard, 'phoneNumber' | 'accessToken' | 'phoneNumberId' | 'wabaId' | 'accessTokenMasked'>): { isConfigured: boolean; missingFields: string[] } {
   const missingFields: string[] = []
   const accessTokenValue = whatsapp.accessToken.trim() || whatsapp.accessTokenMasked?.trim() || ''
 
   if (!whatsapp.phoneNumber.trim()) missingFields.push('Número de telefone')
   if (!accessTokenValue) missingFields.push('Token de acesso')
   if (!whatsapp.phoneNumberId.trim()) missingFields.push('Phone Number ID')
-  if (!whatsapp.businessId.trim()) missingFields.push('Business ID')
+  if (!whatsapp.wabaId.trim()) missingFields.push('WABA ID')
 
   return {
     isConfigured: missingFields.length === 0,

@@ -1,7 +1,12 @@
 import React from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { accountSettingsService } from '../services/accountSettingsService'
-import { whatsappInboxService, type WhatsAppInboxResponse, type WhatsAppTimelineMessage } from '../services/whatsappInboxService'
+import {
+  whatsappInboxService,
+  type WhatsAppInboxResponse,
+  type WhatsAppMediaUrlResponse,
+  type WhatsAppTimelineMessage
+} from '../services/whatsappInboxService'
 import { getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
 
 type WhatsAppInboxPageProps = {
@@ -20,20 +25,22 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
   const [selectedSenderId, setSelectedSenderId] = React.useState('')
   const [outgoingMessage, setOutgoingMessage] = React.useState('')
   const [sendFeedback, setSendFeedback] = React.useState('')
+  const [mediaAssets, setMediaAssets] = React.useState<Record<string, WhatsAppMediaUrlResponse>>({})
+  const [loadingMediaAssets, setLoadingMediaAssets] = React.useState<Set<string>>(new Set())
 
   const getSenderConfigStatus = React.useCallback((sender: {
     phoneNumber: string
     accessToken: string
     accessTokenMasked?: string
     phoneNumberId: string
-    businessId: string
+    wabaId: string
   }) => {
     return getWhatsAppConfigStatus({
       phoneNumber: sender.phoneNumber,
       accessToken: sender.accessToken,
       accessTokenMasked: sender.accessTokenMasked,
       phoneNumberId: sender.phoneNumberId,
-      businessId: sender.businessId
+      wabaId: sender.wabaId
     })
   }, [])
 
@@ -66,12 +73,11 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     return selectedConversation.messages
   }, [selectedConversation])
 
-  const formatMessagePreview = React.useCallback((message: { type: string; text?: string }) => {
-    if (message.type === 'text') {
-      const value = message.text?.trim()
-      return value || '{text}'
-    }
+  const formatMessagePreview = React.useCallback((message: { type: string; text?: string; caption?: string }) => {
+    const value = (message.caption || message.text || '').trim()
+    if (value) return value
 
+    if (message.type === 'text') return '{text}'
     return `{${message.type}}`
   }, [])
 
@@ -97,6 +103,152 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
 
     return 'border-slate-200 bg-slate-50'
   }, [])
+
+  const formatFileSize = React.useCallback((fileSizeBytes?: number) => {
+    if (!fileSizeBytes || fileSizeBytes <= 0) return null
+
+    if (fileSizeBytes < 1024) {
+      return `${fileSizeBytes} B`
+    }
+
+    const units = ['KB', 'MB', 'GB', 'TB']
+    let size = fileSizeBytes / 1024
+    let unitIndex = 0
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024
+      unitIndex += 1
+    }
+
+    const digits = size >= 10 ? 0 : 1
+    return `${size.toFixed(digits)} ${units[unitIndex]}`
+  }, [])
+
+  const getMediaFileName = React.useCallback((url?: string) => {
+    if (!url) return null
+
+    try {
+      const parsedUrl = new URL(url)
+      const pathname = parsedUrl.pathname.split('/').filter(Boolean)
+      const fileName = pathname[pathname.length - 1]
+
+      return fileName ? decodeURIComponent(fileName) : null
+    } catch {
+      return null
+    }
+  }, [])
+
+  const getMediaTypeLabel = React.useCallback((mediaType?: string, mimeType?: string) => {
+    if (mediaType === 'image') return 'Imagem'
+    if (mediaType === 'video') return 'Vídeo'
+    if (mediaType === 'audio') return 'Áudio'
+    if (mediaType === 'document') return 'Documento'
+    if (mediaType === 'sticker') return 'Figurinha'
+    if (mimeType) return mimeType
+    if (mediaType) return mediaType
+    return 'Arquivo'
+  }, [])
+
+  const renderMessageMedia = React.useCallback((message: WhatsAppTimelineMessage) => {
+    if (!message.media) return null
+
+    const assetId = String(message.media.asset_id)
+    const isLoading = loadingMediaAssets.has(assetId)
+    const mediaAsset = mediaAssets[assetId]
+    const mediaUrl = mediaAsset?.url
+    const mediaType = mediaAsset?.media_type || message.media.media_type
+    const mimeType = mediaAsset?.mime_type || message.media.mime_type
+    const fileName = getMediaFileName(mediaUrl)
+    const fileSize = formatFileSize(mediaAsset?.file_size_bytes)
+    const mediaLabel = getMediaTypeLabel(mediaType, mimeType)
+    const isFailed = (mediaAsset?.status || message.media.status) === 'failed'
+
+    if (isLoading) {
+      return (
+        <div className="mt-2 rounded-lg bg-slate-100 p-3 text-center">
+          <p className="text-xs text-slate-600">Carregando mídia...</p>
+        </div>
+      )
+    }
+
+    if (isFailed) {
+      return (
+        <div className="mt-2 rounded-lg bg-red-100 p-3 text-center">
+          <p className="text-xs text-red-700">Falha ao carregar a mídia</p>
+        </div>
+      )
+    }
+
+    if (mediaUrl && (mediaType === 'image' || mediaType === 'sticker')) {
+      return (
+        <div className="mt-2">
+          <img
+            src={mediaUrl}
+            alt={mediaType === 'sticker' ? 'Figurinha da conversa' : 'Imagem da conversa'}
+            className="max-h-72 max-w-xs rounded-lg border border-slate-200 bg-white object-contain"
+            onError={() => {
+              console.error(`Erro ao carregar imagem: ${mediaUrl}`)
+            }}
+          />
+        </div>
+      )
+    }
+
+    if (mediaUrl && mediaType === 'video') {
+      return (
+        <div className="mt-2">
+          <video controls preload="metadata" className="max-h-72 max-w-full rounded-lg border border-slate-200 bg-black">
+            <source src={mediaUrl} type={mimeType || undefined} />
+            Seu navegador não suporta reprodução de vídeo.
+          </video>
+        </div>
+      )
+    }
+
+    if (mediaUrl && mediaType === 'audio') {
+      return (
+        <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Áudio</p>
+          <audio controls preload="metadata" className="w-full">
+            <source src={mediaUrl} type={mimeType || undefined} />
+            Seu navegador não suporta reprodução de áudio.
+          </audio>
+        </div>
+      )
+    }
+
+    if (mediaUrl) {
+      return (
+        <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium text-slate-900">{fileName || mediaLabel}</p>
+              <p className="mt-1 break-all text-xs text-slate-500">{mimeType || mediaLabel}</p>
+              {fileSize && <p className="mt-1 text-xs text-slate-500">Tamanho: {fileSize}</p>}
+            </div>
+            <a
+              href={mediaUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+            >
+              Abrir arquivo
+            </a>
+          </div>
+        </div>
+      )
+    }
+
+    if (!mediaUrl) {
+      return (
+        <div className="mt-2 rounded-lg bg-slate-100 p-3 text-center">
+          <p className="text-xs text-slate-600">Aguardando disponibilidade de {mediaLabel.toLowerCase()}...</p>
+        </div>
+      )
+    }
+
+    return null
+  }, [formatFileSize, getMediaFileName, getMediaTypeLabel, loadingMediaAssets, mediaAssets])
 
   const resolveConfigStatus = React.useCallback(() => {
     const settings = accountSettingsService.getCachedSettings()
@@ -178,6 +330,44 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     setOutgoingMessage('')
     setSendFeedback('')
   }, [selectedWaId])
+
+  const loadMediaUrls = React.useCallback(async (messages: WhatsAppTimelineMessage[]) => {
+    if (!token) return
+
+    const mediaMessagesWithAssetId = messages.filter(
+      (msg) => msg.media?.asset_id && msg.media?.status !== 'failed'
+    )
+
+    for (const message of mediaMessagesWithAssetId) {
+      const assetId = message.media?.asset_id
+      if (!assetId || mediaAssets[String(assetId)]) continue
+
+      const assetIdStr = String(assetId)
+      setLoadingMediaAssets((prev) => new Set(prev).add(assetIdStr))
+
+      try {
+        const mediaData = await whatsappInboxService.getMediaUrl(token, assetId)
+        setMediaAssets((prev) => ({
+          ...prev,
+          [assetIdStr]: mediaData
+        }))
+      } catch (err) {
+        console.error(`Erro ao carregar mídia ${assetId}:`, err)
+      } finally {
+        setLoadingMediaAssets((prev) => {
+          const next = new Set(prev)
+          next.delete(assetIdStr)
+          return next
+        })
+      }
+    }
+  }, [token, mediaAssets])
+
+  React.useEffect(() => {
+    if (conversationMessages.length > 0) {
+      loadMediaUrls(conversationMessages)
+    }
+  }, [conversationMessages, loadMediaUrls])
 
   const handleSendMessage = React.useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -307,6 +497,8 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
                         <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-800">
                           {formatMessagePreview(message)}
                         </p>
+
+                        {renderMessageMedia(message)}
 
                         <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
                           <span className="rounded-full bg-white px-2 py-1">tipo: {message.type}</span>
