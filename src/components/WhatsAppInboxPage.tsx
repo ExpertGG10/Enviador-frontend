@@ -1,7 +1,12 @@
 import React from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { accountSettingsService } from '../services/accountSettingsService'
-import { whatsappInboxService, type WhatsAppInboxResponse, type WhatsAppTimelineMessage } from '../services/whatsappInboxService'
+import {
+  whatsappInboxService,
+  type WhatsAppInboxResponse,
+  type WhatsAppMediaUrlResponse,
+  type WhatsAppTimelineMessage
+} from '../services/whatsappInboxService'
 import { getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
 
 type WhatsAppInboxPageProps = {
@@ -13,22 +18,29 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
   const [isWhatsappConfigured, setIsWhatsappConfigured] = React.useState(false)
   const [isLoadingConfig, setIsLoadingConfig] = React.useState(true)
   const [isLoadingInbox, setIsLoadingInbox] = React.useState(false)
+  const [isSendingMessage, setIsSendingMessage] = React.useState(false)
   const [error, setError] = React.useState('')
   const [inboxData, setInboxData] = React.useState<WhatsAppInboxResponse | null>(null)
   const [selectedWaId, setSelectedWaId] = React.useState('')
+  const [selectedSenderId, setSelectedSenderId] = React.useState('')
+  const [outgoingMessage, setOutgoingMessage] = React.useState('')
+  const [sendFeedback, setSendFeedback] = React.useState('')
+  const [mediaAssets, setMediaAssets] = React.useState<Record<string, WhatsAppMediaUrlResponse>>({})
+  const [loadingMediaAssets, setLoadingMediaAssets] = React.useState<Set<string>>(new Set())
 
   const getSenderConfigStatus = React.useCallback((sender: {
     phoneNumber: string
     accessToken: string
+    accessTokenMasked?: string
     phoneNumberId: string
-    businessId: string
+    wabaId: string
   }) => {
     return getWhatsAppConfigStatus({
       phoneNumber: sender.phoneNumber,
       accessToken: sender.accessToken,
+      accessTokenMasked: sender.accessTokenMasked,
       phoneNumberId: sender.phoneNumberId,
-      businessId: sender.businessId,
-      templates: []
+      wabaId: sender.wabaId
     })
   }, [])
 
@@ -56,12 +68,16 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     return conversations.find((conversation) => conversation.wa_id === selectedWaId) || conversations[0]
   }, [conversations, selectedWaId])
 
-  const formatMessagePreview = React.useCallback((message: { type: string; text?: string }) => {
-    if (message.type === 'text') {
-      const value = message.text?.trim()
-      return value || '{text}'
-    }
+  const conversationMessages = React.useMemo(() => {
+    if (!selectedConversation) return []
+    return selectedConversation.messages
+  }, [selectedConversation])
 
+  const formatMessagePreview = React.useCallback((message: { type: string; text?: string; caption?: string }) => {
+    const value = (message.caption || message.text || '').trim()
+    if (value) return value
+
+    if (message.type === 'text') return '{text}'
     return `{${message.type}}`
   }, [])
 
@@ -88,11 +104,160 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     return 'border-slate-200 bg-slate-50'
   }, [])
 
+  const formatFileSize = React.useCallback((fileSizeBytes?: number) => {
+    if (!fileSizeBytes || fileSizeBytes <= 0) return null
+
+    if (fileSizeBytes < 1024) {
+      return `${fileSizeBytes} B`
+    }
+
+    const units = ['KB', 'MB', 'GB', 'TB']
+    let size = fileSizeBytes / 1024
+    let unitIndex = 0
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024
+      unitIndex += 1
+    }
+
+    const digits = size >= 10 ? 0 : 1
+    return `${size.toFixed(digits)} ${units[unitIndex]}`
+  }, [])
+
+  const getMediaFileName = React.useCallback((url?: string) => {
+    if (!url) return null
+
+    try {
+      const parsedUrl = new URL(url)
+      const pathname = parsedUrl.pathname.split('/').filter(Boolean)
+      const fileName = pathname[pathname.length - 1]
+
+      return fileName ? decodeURIComponent(fileName) : null
+    } catch {
+      return null
+    }
+  }, [])
+
+  const getMediaTypeLabel = React.useCallback((mediaType?: string, mimeType?: string) => {
+    if (mediaType === 'image') return 'Imagem'
+    if (mediaType === 'video') return 'Vídeo'
+    if (mediaType === 'audio') return 'Áudio'
+    if (mediaType === 'document') return 'Documento'
+    if (mediaType === 'sticker') return 'Figurinha'
+    if (mimeType) return mimeType
+    if (mediaType) return mediaType
+    return 'Arquivo'
+  }, [])
+
+  const renderMessageMedia = React.useCallback((message: WhatsAppTimelineMessage) => {
+    if (!message.media) return null
+
+    const assetId = String(message.media.asset_id)
+    const isLoading = loadingMediaAssets.has(assetId)
+    const mediaAsset = mediaAssets[assetId]
+    const mediaUrl = mediaAsset?.url
+    const mediaType = mediaAsset?.media_type || message.media.media_type
+    const mimeType = mediaAsset?.mime_type || message.media.mime_type
+    const fileName = getMediaFileName(mediaUrl)
+    const fileSize = formatFileSize(mediaAsset?.file_size_bytes)
+    const mediaLabel = getMediaTypeLabel(mediaType, mimeType)
+    const isFailed = (mediaAsset?.status || message.media.status) === 'failed'
+
+    if (isLoading) {
+      return (
+        <div className="mt-2 rounded-lg bg-slate-100 p-3 text-center">
+          <p className="text-xs text-slate-600">Carregando mídia...</p>
+        </div>
+      )
+    }
+
+    if (isFailed) {
+      return (
+        <div className="mt-2 rounded-lg bg-red-100 p-3 text-center">
+          <p className="text-xs text-red-700">Falha ao carregar a mídia</p>
+        </div>
+      )
+    }
+
+    if (mediaUrl && (mediaType === 'image' || mediaType === 'sticker')) {
+      return (
+        <div className="mt-2">
+          <img
+            src={mediaUrl}
+            alt={mediaType === 'sticker' ? 'Figurinha da conversa' : 'Imagem da conversa'}
+            className="max-h-72 max-w-xs rounded-lg border border-slate-200 bg-white object-contain"
+            onError={() => {
+              console.error(`Erro ao carregar imagem: ${mediaUrl}`)
+            }}
+          />
+        </div>
+      )
+    }
+
+    if (mediaUrl && mediaType === 'video') {
+      return (
+        <div className="mt-2">
+          <video controls preload="metadata" className="max-h-72 max-w-full rounded-lg border border-slate-200 bg-black">
+            <source src={mediaUrl} type={mimeType || undefined} />
+            Seu navegador não suporta reprodução de vídeo.
+          </video>
+        </div>
+      )
+    }
+
+    if (mediaUrl && mediaType === 'audio') {
+      return (
+        <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Áudio</p>
+          <audio controls preload="metadata" className="w-full">
+            <source src={mediaUrl} type={mimeType || undefined} />
+            Seu navegador não suporta reprodução de áudio.
+          </audio>
+        </div>
+      )
+    }
+
+    if (mediaUrl) {
+      return (
+        <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium text-slate-900">{fileName || mediaLabel}</p>
+              <p className="mt-1 break-all text-xs text-slate-500">{mimeType || mediaLabel}</p>
+              {fileSize && <p className="mt-1 text-xs text-slate-500">Tamanho: {fileSize}</p>}
+            </div>
+            <a
+              href={mediaUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+            >
+              Abrir arquivo
+            </a>
+          </div>
+        </div>
+      )
+    }
+
+    if (!mediaUrl) {
+      return (
+        <div className="mt-2 rounded-lg bg-slate-100 p-3 text-center">
+          <p className="text-xs text-slate-600">Aguardando disponibilidade de {mediaLabel.toLowerCase()}...</p>
+        </div>
+      )
+    }
+
+    return null
+  }, [formatFileSize, getMediaFileName, getMediaTypeLabel, loadingMediaAssets, mediaAssets])
+
   const resolveConfigStatus = React.useCallback(() => {
     const settings = accountSettingsService.getCachedSettings()
-    const hasConfiguredSender = settings.whatsappSenders.some((sender) =>
+    const configuredSenders = settings.whatsappSenders.filter((sender) =>
       getSenderConfigStatus(sender).isConfigured
     )
+    const hasConfiguredSender = configuredSenders.length > 0
+
+    setSelectedSenderId(configuredSenders[0]?.id || '')
     setIsWhatsappConfigured(hasConfiguredSender)
     return hasConfiguredSender
   }, [getSenderConfigStatus])
@@ -123,22 +288,23 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
   }, [resolveConfigStatus, token])
 
   React.useEffect(() => {
-    if (!token) return
-
     let mounted = true
 
     const loadConfig = async () => {
       setIsLoadingConfig(true)
       setError('')
 
-      try {
-        const settings = await accountSettingsService.getSettings(token)
+      if (!token) {
         if (!mounted) return
+        resolveConfigStatus()
+        setIsLoadingConfig(false)
+        return
+      }
 
-        const hasConfiguredSender = settings.whatsappSenders.some((sender) =>
-          getSenderConfigStatus(sender).isConfigured
-        )
-        setIsWhatsappConfigured(hasConfiguredSender)
+      try {
+        await accountSettingsService.getSettings(token)
+        if (!mounted) return
+        resolveConfigStatus()
       } catch {
         if (!mounted) return
         const hasConfiguredSender = resolveConfigStatus()
@@ -153,12 +319,87 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
     return () => {
       mounted = false
     }
-  }, [getSenderConfigStatus, resolveConfigStatus, token])
+  }, [resolveConfigStatus, token])
 
   React.useEffect(() => {
     if (!token || isLoadingConfig || !isWhatsappConfigured) return
     loadInbox()
   }, [isLoadingConfig, isWhatsappConfigured, loadInbox, token])
+
+  React.useEffect(() => {
+    setOutgoingMessage('')
+    setSendFeedback('')
+  }, [selectedWaId])
+
+  const loadMediaUrls = React.useCallback(async (messages: WhatsAppTimelineMessage[]) => {
+    if (!token) return
+
+    const mediaMessagesWithAssetId = messages.filter(
+      (msg) => msg.media?.asset_id && msg.media?.status !== 'failed'
+    )
+
+    for (const message of mediaMessagesWithAssetId) {
+      const assetId = message.media?.asset_id
+      if (!assetId || mediaAssets[String(assetId)]) continue
+
+      const assetIdStr = String(assetId)
+      setLoadingMediaAssets((prev) => new Set(prev).add(assetIdStr))
+
+      try {
+        const mediaData = await whatsappInboxService.getMediaUrl(token, assetId)
+        setMediaAssets((prev) => ({
+          ...prev,
+          [assetIdStr]: mediaData
+        }))
+      } catch (err) {
+        console.error(`Erro ao carregar mídia ${assetId}:`, err)
+      } finally {
+        setLoadingMediaAssets((prev) => {
+          const next = new Set(prev)
+          next.delete(assetIdStr)
+          return next
+        })
+      }
+    }
+  }, [token, mediaAssets])
+
+  React.useEffect(() => {
+    if (conversationMessages.length > 0) {
+      loadMediaUrls(conversationMessages)
+    }
+  }, [conversationMessages, loadMediaUrls])
+
+  const handleSendMessage = React.useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const text = outgoingMessage.trim()
+
+    if (!selectedSenderId) {
+      setSendFeedback('Nenhum remetente WhatsApp ativo foi encontrado para esta conta.')
+      return
+    }
+
+    if (!token || !selectedConversation || !text) return
+
+    setIsSendingMessage(true)
+    setSendFeedback('')
+
+    try {
+      await whatsappInboxService.sendTextMessage(token, {
+        sender_id: selectedSenderId,
+        wa_id: selectedConversation.wa_id,
+        text
+      })
+      setOutgoingMessage('')
+      setSendFeedback('Mensagem enviada com sucesso.')
+      await loadInbox()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Não foi possível enviar a mensagem de WhatsApp.'
+      setSendFeedback(message)
+    } finally {
+      setIsSendingMessage(false)
+    }
+  }, [loadInbox, outgoingMessage, selectedConversation, selectedSenderId, token])
 
   if (isLoadingConfig) {
     return (
@@ -186,20 +427,6 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
 
   return (
     <section className="space-y-4">
-      <div className="card p-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="h2">Inbox WhatsApp</h1>
-          <p className="text-sm text-slate-600">Mensagens recebidas e enviadas separadas por contato.</p>
-        </div>
-
-        <button
-          onClick={loadInbox}
-          className="btn btn-ghost"
-          disabled={isLoadingInbox}
-        >
-          {isLoadingInbox ? 'Carregando...' : 'Atualizar inbox'}
-        </button>
-      </div>
 
       {error && (
         <div className="card p-4 border border-red-200 bg-red-50 text-red-700 text-sm">
@@ -255,53 +482,74 @@ export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps
           </aside>
 
           <section className="card p-4 md:p-6">
+            
             {selectedConversation ? (
               <>
-                <div className="border-b border-slate-200 pb-4">
-                  <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-slate-900">{selectedConversation.contactName}</h2>
-                      <p className="text-sm text-slate-500">{selectedConversation.wa_id}</p>
-                    </div>
-                    <div className="text-sm text-slate-500">
-                      {selectedConversation.messages.length} mensagem(ns) na conversa
-                    </div>
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-900">Mensagens da conversa</h3>
+                    <span className="text-xs text-slate-500">{conversationMessages.length} item(ns)</span>
+                  </div>
+
+                  <div className="max-h-[300px] space-y-3 overflow-y-auto pr-1">
+                    {conversationMessages.map((message) => (
+                      <article key={message.message_id} className={`rounded-2xl border p-4 ${getMessageCardClassName(message)}`}>
+                        <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-800">
+                          {formatMessagePreview(message)}
+                        </p>
+
+                        {renderMessageMedia(message)}
+
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                          <span className="rounded-full bg-white px-2 py-1">tipo: {message.type}</span>
+                          {message.status && (
+                            <span className="rounded-full bg-white px-2 py-1">status: {message.status}</span>
+                          )}
+                          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                            {getMessageDirectionLabel(message.direction)}
+                          </span>
+                          <time className="text-xs text-slate-400">{formatDateTime(message.datetime_iso)}</time>
+                        </div>
+                      </article>
+                    ))}
+
+                    {conversationMessages.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
+                        Este contato não possui mensagens no payload atual.
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-3">
-                  {selectedConversation.messages.map((message) => (
-                    <article key={message.message_id} className={`rounded-2xl border p-4 ${getMessageCardClassName(message)}`}>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
-                          {getMessageDirectionLabel(message.direction)}
-                        </span>
-                        <time className="text-xs text-slate-400">{formatDateTime(message.datetime_iso)}</time>
-                      </div>
-
-                      <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-800">
-                        {formatMessagePreview(message)}
-                      </p>
-
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-                        <span className="rounded-full bg-white px-2 py-1">tipo: {message.type}</span>
-                        <span className="rounded-full bg-white px-2 py-1">evento: {message.event_id}</span>
-                        {message.status && (
-                          <span className="rounded-full bg-white px-2 py-1">status: {message.status}</span>
-                        )}
-                        {message.display_phone_number && (
-                          <span className="rounded-full bg-white px-2 py-1">número exibido: {message.display_phone_number}</span>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-
-                  {selectedConversation.messages.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-                      Este contato não possui mensagens no payload atual.
-                    </div>
+                <form
+                  className="mt-4 border-t border-slate-200 pt-4"
+                  onSubmit={handleSendMessage}
+                >
+                  <label htmlFor="wa-outgoing-message" className="text-sm font-semibold text-slate-900">
+                    Enviar mensagem
+                  </label>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id="wa-outgoing-message"
+                      type="text"
+                      value={outgoingMessage}
+                      onChange={(event) => setOutgoingMessage(event.target.value)}
+                      placeholder="Digite a mensagem para este contato"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                      disabled={isSendingMessage}
+                    />
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={!outgoingMessage.trim() || !selectedSenderId || isSendingMessage || isLoadingInbox}
+                    >
+                      {isSendingMessage ? 'Enviando...' : 'Enviar'}
+                    </button>
+                  </div>
+                  {sendFeedback && (
+                    <p className="mt-2 text-xs text-slate-600">{sendFeedback}</p>
                   )}
-                </div>
+                </form>
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">

@@ -1,51 +1,32 @@
-export interface GmailSettings {
-  senderEmail: string
-  appPassword: string
-}
-
 export interface MessageTemplate {
   title: string
   content: string
   subject?: string
 }
 
-export interface GmailSenderCard extends GmailSettings {
+export interface GmailSenderCard {
   id: string
+  senderEmail: string
+  appPassword: string
   templates: MessageTemplate[]
 }
 
-export interface WhatsAppSettings {
+export interface WhatsAppSenderCard {
+  id: string
   phoneNumber: string
   accessToken: string
+  accessTokenMasked?: string
   phoneNumberId: string
-  businessId: string
-  templates: string[]
-}
-
-export interface WhatsAppSenderCard extends WhatsAppSettings {
-  id: string
+  wabaId: string
   templates: MessageTemplate[]
 }
 
 export interface AccountSettings {
-  gmail: GmailSettings
   gmailSenders: GmailSenderCard[]
-  whatsapp: WhatsAppSettings
   whatsappSenders: WhatsAppSenderCard[]
 }
 
 export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
-  gmail: {
-    senderEmail: '',
-    appPassword: ''
-  },
   gmailSenders: [],
-  whatsapp: {
-    phoneNumber: '',
-    accessToken: '',
-    phoneNumberId: '',
-    businessId: '',
-    templates: []
-  },
   whatsappSenders: []
 }

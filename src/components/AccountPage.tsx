@@ -22,15 +22,23 @@ export default function AccountPage() {
   const [templateSubjectInput, setTemplateSubjectInput] = useState('')
   const [templateContentInput, setTemplateContentInput] = useState('')
 
-  const [gmailEmailInput, setGmailEmailInput] = useState(settings.gmail.senderEmail)
-  const [gmailPasswordInput, setGmailPasswordInput] = useState(settings.gmail.appPassword)
+  const activeGmailSender = settings.gmailSenders[0] || null
+  const activeWhatsAppSender = settings.whatsappSenders[0] || null
 
-  const [phoneNumber, setPhoneNumber] = useState(settings.whatsapp.phoneNumber)
-  const [accessToken, setAccessToken] = useState(settings.whatsapp.accessToken)
-  const [phoneNumberId, setPhoneNumberId] = useState(settings.whatsapp.phoneNumberId)
-  const [businessId, setBusinessId] = useState(settings.whatsapp.businessId)
+  const [gmailEmailInput, setGmailEmailInput] = useState(activeGmailSender?.senderEmail || '')
+  const [gmailPasswordInput, setGmailPasswordInput] = useState(activeGmailSender?.appPassword || '')
 
-  const whatsappStatus = useMemo(() => getWhatsAppConfigStatus(settings.whatsapp), [settings.whatsapp])
+  const [phoneNumber, setPhoneNumber] = useState(activeWhatsAppSender?.phoneNumber || '')
+  const [accessToken, setAccessToken] = useState(activeWhatsAppSender?.accessToken || '')
+  const [phoneNumberId, setPhoneNumberId] = useState(activeWhatsAppSender?.phoneNumberId || '')
+  const [wabaId, setWabaId] = useState(activeWhatsAppSender?.wabaId || '')
+
+  const whatsappStatus = useMemo(() => getWhatsAppConfigStatus(activeWhatsAppSender || {
+    phoneNumber: '',
+    accessToken: '',
+    phoneNumberId: '',
+    wabaId: ''
+  }), [activeWhatsAppSender])
   const whatsappSenderConfigured = settings.whatsappSenders.length > 0
 
   React.useEffect(() => {
@@ -45,12 +53,12 @@ export default function AccountPage() {
       .then((loaded) => {
         if (!mounted) return
         setSettings(loaded)
-        setGmailEmailInput(loaded.gmail.senderEmail)
-        setGmailPasswordInput(loaded.gmail.appPassword)
-        setPhoneNumber(loaded.whatsapp.phoneNumber)
-        setAccessToken(loaded.whatsapp.accessToken)
-        setPhoneNumberId(loaded.whatsapp.phoneNumberId)
-        setBusinessId(loaded.whatsapp.businessId)
+        setGmailEmailInput(loaded.gmailSenders[0]?.senderEmail || '')
+        setGmailPasswordInput(loaded.gmailSenders[0]?.appPassword || '')
+        setPhoneNumber(loaded.whatsappSenders[0]?.phoneNumber || '')
+        setAccessToken(loaded.whatsappSenders[0]?.accessToken || '')
+        setPhoneNumberId(loaded.whatsappSenders[0]?.phoneNumberId || '')
+        setWabaId(loaded.whatsappSenders[0]?.wabaId || '')
       })
       .catch(() => {
         if (!mounted) return
@@ -85,20 +93,29 @@ export default function AccountPage() {
     setTemplateContentInput('')
   }
 
-  function handleAddTemplateToSender(channel: 'gmail' | 'whatsapp', senderId: string) {
+  async function handleAddTemplateToSender(channel: 'gmail' | 'whatsapp', senderId: string) {
     const title = templateTitleInput.trim()
     const subject = templateSubjectInput.trim()
     const content = templateContentInput.trim()
 
-    if (!title || !content) {
-      setApiMessage('Informe título e conteúdo do template.')
+    if (!title) {
+      setApiMessage(channel === 'gmail' ? 'Informe título e conteúdo do template.' : 'Informe o título do template do WhatsApp.')
       return
     }
 
-    if (channel === 'gmail' && !subject) {
-      setApiMessage('No template de email, o campo assunto é obrigatório.')
-      return
+    if (channel === 'gmail') {
+      if (!content) {
+        setApiMessage('Informe título e conteúdo do template.')
+        return
+      }
+
+      if (!subject) {
+        setApiMessage('No template de email, o campo assunto é obrigatório.')
+        return
+      }
     }
+
+    let next: AccountSettings
 
     if (channel === 'gmail') {
       const nextGmailSenders = settings.gmailSenders.map(sender => {
@@ -109,75 +126,74 @@ export default function AccountPage() {
         ]
         return { ...sender, templates: nextTemplates }
       })
+      next = { ...settings, gmailSenders: nextGmailSenders }
+    } else {
+      const nextWhatsappSenders = settings.whatsappSenders.map(sender => {
+        if (sender.id !== senderId) return sender
+        const nextTemplates = [
+          ...sender.templates.filter(template => template.title !== title),
+          { title, content: '' }
+        ]
+        return { ...sender, templates: nextTemplates }
+      })
+      next = { ...settings, whatsappSenders: nextWhatsappSenders }
+    }
 
-      setSettings(prev => saveAccountSettings({ ...prev, gmailSenders: nextGmailSenders }))
+    if (!token) {
+      setSettings(saveAccountSettings(next))
       closeTemplateEditor()
       return
     }
 
-    const nextWhatsappSenders = settings.whatsappSenders.map(sender => {
-      if (sender.id !== senderId) return sender
-      const nextTemplates = [
-        ...sender.templates.filter(template => template.title !== title),
-        { title, content }
-      ]
-      return { ...sender, templates: nextTemplates }
-    })
-
-    const activeSender = nextWhatsappSenders.find(sender =>
-      sender.phoneNumber === settings.whatsapp.phoneNumber &&
-      sender.phoneNumberId === settings.whatsapp.phoneNumberId &&
-      sender.businessId === settings.whatsapp.businessId
-    )
-
-    setSettings(prev => saveAccountSettings({
-      ...prev,
-      whatsappSenders: nextWhatsappSenders,
-      whatsapp: activeSender
-        ? {
-            ...prev.whatsapp,
-            templates: activeSender.templates.map(template => template.title)
-          }
-        : prev.whatsapp
-    }))
-
-    closeTemplateEditor()
+    setIsSaving(true)
+    setApiMessage('')
+    try {
+      const saved = await accountSettingsService.saveSettings(token, next)
+      setSettings(saveAccountSettings(saved))
+      closeTemplateEditor()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao salvar template.'
+      setApiMessage(message)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  function handleDeleteTemplateFromSender(channel: 'gmail' | 'whatsapp', senderId: string, templateTitle: string) {
+  async function handleDeleteTemplateFromSender(channel: 'gmail' | 'whatsapp', senderId: string, templateTitle: string) {
+    let next: AccountSettings
+
     if (channel === 'gmail') {
       const nextGmailSenders = settings.gmailSenders.map(sender =>
         sender.id === senderId
           ? { ...sender, templates: sender.templates.filter(template => template.title !== templateTitle) }
           : sender
       )
+      next = { ...settings, gmailSenders: nextGmailSenders }
+    } else {
+      const nextWhatsappSenders = settings.whatsappSenders.map(sender =>
+        sender.id === senderId
+          ? { ...sender, templates: sender.templates.filter(template => template.title !== templateTitle) }
+          : sender
+      )
+      next = { ...settings, whatsappSenders: nextWhatsappSenders }
+    }
 
-      setSettings(prev => saveAccountSettings({ ...prev, gmailSenders: nextGmailSenders }))
+    if (!token) {
+      setSettings(saveAccountSettings(next))
       return
     }
 
-    const nextWhatsappSenders = settings.whatsappSenders.map(sender =>
-      sender.id === senderId
-        ? { ...sender, templates: sender.templates.filter(template => template.title !== templateTitle) }
-        : sender
-    )
-
-    const activeSender = nextWhatsappSenders.find(sender =>
-      sender.phoneNumber === settings.whatsapp.phoneNumber &&
-      sender.phoneNumberId === settings.whatsapp.phoneNumberId &&
-      sender.businessId === settings.whatsapp.businessId
-    )
-
-    setSettings(prev => saveAccountSettings({
-      ...prev,
-      whatsappSenders: nextWhatsappSenders,
-      whatsapp: activeSender
-        ? {
-            ...prev.whatsapp,
-            templates: activeSender.templates.map(template => template.title)
-          }
-        : prev.whatsapp
-    }))
+    setIsSaving(true)
+    setApiMessage('')
+    try {
+      const saved = await accountSettingsService.saveSettings(token, next)
+      setSettings(saveAccountSettings(saved))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao excluir template.'
+      setApiMessage(message)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   async function handleSaveGmail(e: React.FormEvent) {
@@ -208,21 +224,17 @@ export default function AccountPage() {
 
     const next: AccountSettings = {
       ...settings,
-      gmail: nextSender,
       gmailSenders: nextSenders
     }
 
     setIsSaving(true)
     setApiMessage('')
     try {
-      const saved = await accountSettingsService.saveGmailSettings(token, next.gmail)
-      const merged = saveAccountSettings({
-        ...saved,
-        gmailSenders: next.gmailSenders
-      })
+      const saved = await accountSettingsService.saveSettings(token, next)
+      const merged = saveAccountSettings(saved)
       setSettings(merged)
-      setGmailEmailInput(merged.gmail.senderEmail)
-      setGmailPasswordInput(merged.gmail.appPassword)
+      setGmailEmailInput(merged.gmailSenders[0]?.senderEmail || '')
+      setGmailPasswordInput(merged.gmailSenders[0]?.appPassword || '')
       setShowGmailForm(false)
       setEditingGmailSenderId(null)
       setGmailSaved(true)
@@ -253,23 +265,20 @@ export default function AccountPage() {
     if (!confirm('Deseja excluir este remetente de Gmail?')) return
 
     const remaining = settings.gmailSenders.filter(sender => sender.id !== senderId)
-    const nextActive = remaining[0]
+    const next: AccountSettings = {
+      ...settings,
+      gmailSenders: remaining
+    }
 
     setIsSaving(true)
     setApiMessage('')
     try {
-      const saved = await accountSettingsService.saveGmailSettings(token, nextActive || {
-        senderEmail: '',
-        appPassword: ''
-      })
-      const merged = saveAccountSettings({
-        ...saved,
-        gmailSenders: remaining
-      })
+      const saved = await accountSettingsService.saveSettings(token, next)
+      const merged = saveAccountSettings(saved)
 
       setSettings(merged)
-      setGmailEmailInput(merged.gmail.senderEmail)
-      setGmailPasswordInput(merged.gmail.appPassword)
+      setGmailEmailInput(merged.gmailSenders[0]?.senderEmail || '')
+      setGmailPasswordInput(merged.gmailSenders[0]?.appPassword || '')
       setShowGmailForm(false)
       setEditingGmailSenderId(null)
     } catch (error) {
@@ -292,16 +301,8 @@ export default function AccountPage() {
       phoneNumber: phoneNumber.trim(),
       accessToken: accessToken.trim(),
       phoneNumberId: phoneNumberId.trim(),
-      businessId: businessId.trim(),
+      wabaId: wabaId.trim(),
       templates: settings.whatsappSenders.find(sender => sender.id === editingWhatsAppSenderId)?.templates || []
-    }
-
-    const nextWhatsapp: AccountSettings['whatsapp'] = {
-      phoneNumber: nextSender.phoneNumber,
-      accessToken: nextSender.accessToken,
-      phoneNumberId: nextSender.phoneNumberId,
-      businessId: nextSender.businessId,
-      templates: nextSender.templates.map(template => template.title)
     }
 
     const existing = settings.whatsappSenders
@@ -313,24 +314,20 @@ export default function AccountPage() {
 
     const next: AccountSettings = {
       ...settings,
-      whatsapp: nextWhatsapp,
       whatsappSenders: nextSenders
     }
 
     setIsSaving(true)
     setApiMessage('')
     try {
-      const saved = await accountSettingsService.saveWhatsAppSettings(token, next.whatsapp)
-      const merged = saveAccountSettings({
-        ...saved,
-        whatsappSenders: next.whatsappSenders
-      })
+      const saved = await accountSettingsService.saveSettings(token, next)
+      const merged = saveAccountSettings(saved)
 
       setSettings(merged)
-      setPhoneNumber(merged.whatsapp.phoneNumber)
-      setAccessToken(merged.whatsapp.accessToken)
-      setPhoneNumberId(merged.whatsapp.phoneNumberId)
-      setBusinessId(merged.whatsapp.businessId)
+      setPhoneNumber(merged.whatsappSenders[0]?.phoneNumber || '')
+      setAccessToken(merged.whatsappSenders[0]?.accessToken || '')
+      setPhoneNumberId(merged.whatsappSenders[0]?.phoneNumberId || '')
+      setWabaId(merged.whatsappSenders[0]?.wabaId || '')
       setWhatsappSaved(true)
       setShowWhatsAppSenderForm(false)
       setEditingWhatsAppSenderId(null)
@@ -361,40 +358,22 @@ export default function AccountPage() {
     if (!confirm('Deseja excluir este remetente de WhatsApp?')) return
 
     const remaining = settings.whatsappSenders.filter(sender => sender.id !== senderId)
-    const nextActive = remaining[0]
+    const next: AccountSettings = {
+      ...settings,
+      whatsappSenders: remaining
+    }
 
     setIsSaving(true)
     setApiMessage('')
     try {
-      const saved = await accountSettingsService.saveWhatsAppSettings(
-        token,
-        nextActive
-          ? {
-              phoneNumber: nextActive.phoneNumber,
-              accessToken: nextActive.accessToken,
-              phoneNumberId: nextActive.phoneNumberId,
-              businessId: nextActive.businessId,
-              templates: nextActive.templates.map(template => template.title)
-            }
-          : {
-              phoneNumber: '',
-              accessToken: '',
-              phoneNumberId: '',
-              businessId: '',
-              templates: []
-            }
-      )
-
-      const merged = saveAccountSettings({
-        ...saved,
-        whatsappSenders: remaining
-      })
+      const saved = await accountSettingsService.saveSettings(token, next)
+      const merged = saveAccountSettings(saved)
 
       setSettings(merged)
-      setPhoneNumber(merged.whatsapp.phoneNumber)
-      setAccessToken(merged.whatsapp.accessToken)
-      setPhoneNumberId(merged.whatsapp.phoneNumberId)
-      setBusinessId(merged.whatsapp.businessId)
+      setPhoneNumber(merged.whatsappSenders[0]?.phoneNumber || '')
+      setAccessToken(merged.whatsappSenders[0]?.accessToken || '')
+      setPhoneNumberId(merged.whatsappSenders[0]?.phoneNumberId || '')
+      setWabaId(merged.whatsappSenders[0]?.wabaId || '')
       setShowWhatsAppSenderForm(false)
       setEditingWhatsAppSenderId(null)
     } catch (error) {
@@ -410,7 +389,7 @@ export default function AccountPage() {
     setPhoneNumber('')
     setAccessToken('')
     setPhoneNumberId('')
-    setBusinessId('')
+    setWabaId('')
     setShowWhatsAppSenderForm(true)
   }
 
@@ -428,18 +407,30 @@ export default function AccountPage() {
     setShowGmailForm(true)
   }
 
-  function handleSelectGmailSender(sender: GmailSenderCard) {
-    setSettings(prev => saveAccountSettings({
-      ...prev,
-      gmail: {
-        senderEmail: sender.senderEmail,
-        appPassword: sender.appPassword
-      }
-    }))
+  async function handleSelectGmailSender(sender: GmailSenderCard) {
+    const next = saveAccountSettings({
+      ...settings,
+      gmailSenders: [sender, ...settings.gmailSenders.filter(item => item.id !== sender.id)]
+    })
 
+    setSettings(next)
     setEditingGmailSenderId(sender.id)
     setGmailEmailInput(sender.senderEmail)
     setGmailPasswordInput(sender.appPassword)
+
+    if (!token) return
+
+    setIsSaving(true)
+    setApiMessage('')
+    try {
+      const saved = await accountSettingsService.saveSettings(token, next)
+      setSettings(saveAccountSettings(saved))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao selecionar remetente de Gmail.'
+      setApiMessage(message)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   function handleEditWhatsAppSender(sender: WhatsAppSenderCard) {
@@ -447,31 +438,42 @@ export default function AccountPage() {
     setPhoneNumber(sender.phoneNumber)
     setAccessToken(sender.accessToken)
     setPhoneNumberId(sender.phoneNumberId)
-    setBusinessId(sender.businessId)
+    setWabaId(sender.wabaId)
     setShowWhatsAppSenderForm(true)
   }
 
-  function handleSelectWhatsAppSender(sender: WhatsAppSenderCard) {
-    setSettings(prev => saveAccountSettings({
-      ...prev,
-      whatsapp: {
-        phoneNumber: sender.phoneNumber,
-        accessToken: sender.accessToken,
-        phoneNumberId: sender.phoneNumberId,
-        businessId: sender.businessId,
-        templates: sender.templates.map(template => template.title)
-      }
-    }))
+  async function handleSelectWhatsAppSender(sender: WhatsAppSenderCard) {
+    const next = saveAccountSettings({
+      ...settings,
+      whatsappSenders: [sender, ...settings.whatsappSenders.filter(item => item.id !== sender.id)]
+    })
 
+    setSettings(next)
     setEditingWhatsAppSenderId(sender.id)
     setPhoneNumber(sender.phoneNumber)
     setAccessToken(sender.accessToken)
     setPhoneNumberId(sender.phoneNumberId)
-    setBusinessId(sender.businessId)
+    setWabaId(sender.wabaId)
+
+    if (!token) return
+
+    setIsSaving(true)
+    setApiMessage('')
+    try {
+      const saved = await accountSettingsService.saveSettings(token, next)
+      setSettings(saveAccountSettings(saved))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao selecionar remetente de WhatsApp.'
+      setApiMessage(message)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   function renderTemplateSection(channel: 'gmail' | 'whatsapp', senderId: string, templates: Array<{ title: string; content: string; subject?: string }>) {
     const isEditingThisCard = templateTarget?.channel === channel && templateTarget.senderId === senderId
+    const isWhatsapp = channel === 'whatsapp'
+    const channelBtnClass = isWhatsapp ? 'btn-whatsapp' : 'btn-gmail'
 
     return (
       <div className="mt-3 rounded-lg border border-slate-200 bg-white/80 p-3 space-y-2">
@@ -482,9 +484,15 @@ export default function AccountPage() {
             className="btn btn-ghost"
             onClick={() => (isEditingThisCard ? closeTemplateEditor() : openTemplateEditor(channel, senderId))}
           >
-            {isEditingThisCard ? 'Cancelar template' : 'Adicionar template'}
+            {isEditingThisCard ? 'Cancelar template' : isWhatsapp ? 'Adicionar template da Meta' : 'Adicionar template'}
           </button>
         </div>
+
+        {isWhatsapp && (
+          <p className="text-xs text-slate-500">
+            Para WhatsApp, este sistema salva apenas o título exato da template já aprovada na Meta.
+          </p>
+        )}
 
         {templates.length > 0 ? (
           <div className="space-y-2">
@@ -494,17 +502,19 @@ export default function AccountPage() {
                 {channel === 'gmail' && (
                   <p className="mt-2 text-sm text-slate-700"><span className="font-medium">Assunto:</span> {template.subject || 'Sem assunto.'}</p>
                 )}
-                {template.content ? (
+                {channel === 'gmail' && template.content ? (
                   <div
                     className="mt-2 text-sm text-slate-600 whitespace-pre-wrap"
                     dangerouslySetInnerHTML={{ __html: template.content }}
                   />
-                ) : (
+                ) : channel === 'gmail' ? (
                   <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">Sem conteúdo.</p>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-600">Template referenciada pelo título. Conteúdo e variáveis são gerenciados na Meta.</p>
                 )}
                 <button
                   type="button"
-                  className="btn btn-ghost mt-2"
+                  className="btn btn-destructive btn-sm mt-2"
                   onClick={() => handleDeleteTemplateFromSender(channel, senderId, template.title)}
                 >
                   Excluir template
@@ -522,25 +532,32 @@ export default function AccountPage() {
               type="text"
               value={templateTitleInput}
               onChange={(e) => setTemplateTitleInput(e.target.value)}
-              placeholder="Título do template"
+              placeholder={isWhatsapp ? 'Nome exato da template cadastrada na Meta' : 'Título do template'}
               className="input w-full"
             />
             {channel === 'gmail' && (
-              <input
-                type="text"
-                value={templateSubjectInput}
-                onChange={(e) => setTemplateSubjectInput(e.target.value)}
-                placeholder="Assunto do email"
-                className="input w-full"
-              />
+              <>
+                <input
+                  type="text"
+                  value={templateSubjectInput}
+                  onChange={(e) => setTemplateSubjectInput(e.target.value)}
+                  placeholder="Assunto do email"
+                  className="input w-full"
+                />
+                <RichTextInput
+                  value={templateContentInput}
+                  onChange={setTemplateContentInput}
+                  placeholder="Digite ou cole aqui um texto formatado (Ctrl+V com negrito, listas, etc.)"
+                  minHeightClassName="min-h-[110px]"
+                />
+              </>
             )}
-            <RichTextInput
-              value={templateContentInput}
-              onChange={setTemplateContentInput}
-              placeholder="Digite ou cole aqui um texto formatado (Ctrl+V com negrito, listas, etc.)"
-              minHeightClassName="min-h-[110px]"
-            />
-            <button type="button" className="btn btn-primary" onClick={() => handleAddTemplateToSender(channel, senderId)}>
+            {isWhatsapp && (
+              <p className="text-xs text-slate-500">
+                O corpo da mensagem não é cadastrado aqui. Informe apenas o título da template existente na plataforma da Meta.
+              </p>
+            )}
+            <button type="button" className={`btn ${channelBtnClass}`} onClick={() => handleAddTemplateToSender(channel, senderId)}>
               Salvar template
             </button>
           </div>
@@ -557,7 +574,7 @@ export default function AccountPage() {
           Configure e visualize as credenciais de Gmail e WhatsApp Business para habilitar o envio.
         </p>
         {isLoading && <p className="text-sm text-slate-500 mt-2">Carregando configurações da conta...</p>}
-        {apiMessage && <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-2">{apiMessage}</p>}
+        {apiMessage && <p className="badge-warning mt-2">{apiMessage}</p>}
       </div>
 
       <div className="card p-6 space-y-4 bg-red-50/80 border-2 border-red-300 shadow-sm">
@@ -566,7 +583,7 @@ export default function AccountPage() {
             <h3 className="text-lg font-semibold text-slate-900">Gmail</h3>
             <p className="text-sm text-slate-600">Configuração usada para envios por email.</p>
           </div>
-          {gmailSaved && <span className="text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-1">Configuração salva</span>}
+          {gmailSaved && <span className="badge-success">Configuração salva</span>}
         </div>
         <div className="rounded-lg border-2 border-red-300 bg-white/85 p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -576,7 +593,7 @@ export default function AccountPage() {
           {settings.gmailSenders.length > 0 ? (
             <div className="space-y-2 text-sm">
               {settings.gmailSenders.map((sender) => {
-                const isActive = sender.senderEmail === settings.gmail.senderEmail
+                const isActive = sender.id === activeGmailSender?.id
 
                 return (
                   <div
@@ -609,15 +626,15 @@ export default function AccountPage() {
             <p className="text-sm text-slate-600">Nenhum remetente de Gmail cadastrado.</p>
           )}
 
-          <button type="button" className="btn btn-primary" onClick={handleCreateNewGmailSender}>
-            Adicionar remetente Gmail
+          <button type="button" className="btn btn-gmail" onClick={handleCreateNewGmailSender}>
+            Adicionar remetente
           </button>
         </div>
 
         {showGmailForm && (
           <form onSubmit={handleSaveGmail} className="space-y-3 border-2 border-red-300 rounded-lg p-4 bg-white/80">
             <div>
-              <label htmlFor="account-gmail-email" className="block text-sm font-medium text-gray-700 mb-1">Email remetente</label>
+              <label htmlFor="account-gmail-email" className="form-label">Email remetente</label>
               <input
                 id="account-gmail-email"
                 type="email"
@@ -629,7 +646,7 @@ export default function AccountPage() {
               />
             </div>
             <div>
-              <label htmlFor="account-gmail-password" className="block text-sm font-medium text-gray-700 mb-1">Senha de app Gmail</label>
+              <label htmlFor="account-gmail-password" className="form-label">Senha de app Gmail</label>
               <input
                 id="account-gmail-password"
                 name="account-gmail-password"
@@ -644,7 +661,7 @@ export default function AccountPage() {
                 Gere em: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="text-red-600 hover:underline">Google App Passwords</a>
               </p>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar Gmail'}</button>
+            <button type="submit" className="btn btn-gmail" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar Gmail'}</button>
           </form>
         )}
       </div>
@@ -655,7 +672,7 @@ export default function AccountPage() {
             <h3 className="text-lg font-semibold text-slate-900">WhatsApp Business</h3>
             <p className="text-sm text-slate-600">Somente templates aprovados pela Meta são aceitos para envio.</p>
           </div>
-          {whatsappSaved && <span className="text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-1">Cadastro salvo</span>}
+          {whatsappSaved && <span className="badge-success">Cadastro salvo</span>}
         </div>
         <div className="rounded-lg border-2 border-green-300 bg-white/85 p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -665,10 +682,7 @@ export default function AccountPage() {
           {whatsappSenderConfigured ? (
             <div className="space-y-2">
               {settings.whatsappSenders.map((sender) => {
-                const isActive =
-                  sender.phoneNumber === settings.whatsapp.phoneNumber &&
-                  sender.phoneNumberId === settings.whatsapp.phoneNumberId &&
-                  sender.businessId === settings.whatsapp.businessId
+                const isActive = sender.id === activeWhatsAppSender?.id
 
                 return (
                   <div
@@ -678,9 +692,9 @@ export default function AccountPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1">
                         <div><span className="text-slate-500">Número:</span> <span className="font-medium text-slate-900">{sender.phoneNumber}</span></div>
-                        <div><span className="text-slate-500">Access Token:</span> <span className="font-medium text-slate-900">{maskSecret(sender.accessToken)}</span></div>
+                        <div><span className="text-slate-500">Access Token:</span> <span className="font-medium text-slate-900">{sender.accessTokenMasked || maskSecret(sender.accessToken)}</span></div>
                         <div><span className="text-slate-500">Phone Number ID:</span> <span className="font-medium text-slate-900">{sender.phoneNumberId}</span></div>
-                        <div><span className="text-slate-500">Business ID:</span> <span className="font-medium text-slate-900">{sender.businessId}</span></div>
+                        <div><span className="text-slate-500">WABA ID:</span> <span className="font-medium text-slate-900">{sender.wabaId}</span></div>
                       </div>
                       <div className="flex items-center gap-1">
                         <button type="button" className="btn btn-ghost" onClick={() => handleSelectWhatsAppSender(sender)}>
@@ -703,15 +717,15 @@ export default function AccountPage() {
             <p className="text-sm text-slate-600">Nenhum remetente de WhatsApp cadastrado.</p>
           )}
 
-          <button type="button" onClick={handleCreateNewWhatsAppSender} className="btn btn-primary">
-            Adicionar remetente WhatsApp
+          <button type="button" onClick={handleCreateNewWhatsAppSender} className="btn btn-whatsapp">
+            Adicionar remetente
           </button>
         </div>
 
         {showWhatsAppSenderForm && (
           <form onSubmit={handleSaveWhatsAppSender} className="space-y-3 border-2 border-green-300 rounded-lg p-4 bg-white/80">
             <div>
-              <label htmlFor="wa-phone-number" className="block text-sm font-medium text-gray-700 mb-1">Número de telefone</label>
+              <label htmlFor="wa-phone-number" className="form-label">Número de telefone</label>
               <input
                 id="wa-phone-number"
                 type="tel"
@@ -723,7 +737,7 @@ export default function AccountPage() {
             </div>
 
             <div>
-              <label htmlFor="wa-access-token" className="block text-sm font-medium text-gray-700 mb-1">Token de acesso</label>
+              <label htmlFor="wa-access-token" className="form-label">Token de acesso</label>
               <input
                 id="wa-access-token"
                 name="wa-access-token"
@@ -737,7 +751,7 @@ export default function AccountPage() {
             </div>
 
             <div>
-              <label htmlFor="wa-phone-number-id" className="block text-sm font-medium text-gray-700 mb-1">Phone Number ID</label>
+              <label htmlFor="wa-phone-number-id" className="form-label">Phone Number ID</label>
               <input
                 id="wa-phone-number-id"
                 type="text"
@@ -749,18 +763,18 @@ export default function AccountPage() {
             </div>
 
             <div>
-              <label htmlFor="wa-business-id" className="block text-sm font-medium text-gray-700 mb-1">Business ID</label>
+              <label htmlFor="wa-business-id" className="form-label">WABA ID</label>
               <input
                 id="wa-business-id"
                 type="text"
-                value={businessId}
-                onChange={(e) => setBusinessId(e.target.value)}
-                placeholder="Identificador do Business Manager"
+                value={wabaId}
+                onChange={(e) => setWabaId(e.target.value)}
+                placeholder="Identificador do WhatsApp Business Account"
                 className="input w-full"
               />
             </div>
 
-            <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar remetente WhatsApp'}</button>
+            <button type="submit" className="btn btn-whatsapp" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar remetente WhatsApp'}</button>
           </form>
         )}
 

@@ -107,7 +107,19 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
           </button>
         </form>
 
-        
+        <div className="mt-6 text-center">
+          <p className="text-gray-600">
+            Ainda nao tem conta?{' '}
+            <button
+              type="button"
+              onClick={() => onNavigate('signup')}
+              className="text-indigo-600 hover:text-indigo-700 font-semibold transition"
+              disabled={isLoading}
+            >
+              Cadastre-se
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );

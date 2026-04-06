@@ -9,18 +9,14 @@ import { DataTableSection } from './send-page/DataTableSection'
 import { AttachmentsSection } from './send-page/AttachmentsSection'
 import { MessageSection } from './send-page/MessageSection'
 import { ContactChannelSection } from './send-page/ContactChannelSection'
+import { WhatsAppTemplatePreviewSection, VariableBinding } from './send-page/WhatsAppTemplatePreviewSection'
 import { AttachmentWarningsModal } from './send-page/AttachmentWarningsModal'
 import { ColumnModals } from './send-page/ColumnModals'
 import { parseFile, headersEqual, type Row } from '../utils/fileUtils'
 import { getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
 import { accountSettingsService } from '../services/accountSettingsService'
+import { whatsappTemplateService } from '../services/whatsappTemplateService'
 import { AccountSettings } from '../types/accountSettings'
-
-type VariableBinding = {
-  mode: 'column' | 'fixed'
-  column: string
-  value: string
-}
 
 type SendDraft = {
   channel: 'whatsapp' | 'email' | 'none'
@@ -63,8 +59,9 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   const buildWhatsappStatus = React.useCallback((sender: {
     phoneNumber: string
     accessToken: string
+    accessTokenMasked?: string
     phoneNumberId: string
-    businessId: string
+    wabaId: string
     templates: Array<{ title: string }>
   } | null) => {
     if (!sender) {
@@ -72,17 +69,16 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         phoneNumber: '',
         accessToken: '',
         phoneNumberId: '',
-        businessId: '',
-        templates: []
+        wabaId: ''
       })
     }
 
     return getWhatsAppConfigStatus({
       phoneNumber: sender.phoneNumber,
       accessToken: sender.accessToken,
+      accessTokenMasked: sender.accessTokenMasked,
       phoneNumberId: sender.phoneNumberId,
-      businessId: sender.businessId,
-      templates: sender.templates.map(template => template.title)
+      wabaId: sender.wabaId
     })
   }, [])
   
@@ -95,11 +91,21 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   const [channel, setChannel] = useState<'whatsapp' | 'email' | 'none'>('none')
   const [message, setMessage] = useState<string>('')
   const [subject, setSubject] = useState<string>('')
-  const [selectedEmailSender, setSelectedEmailSender] = useState<string>(initialDraft?.selectedEmailSender || accountSettings.gmail.senderEmail)
+  const [selectedEmailSender, setSelectedEmailSender] = useState<string>(initialDraft?.selectedEmailSender || accountSettings.gmailSenders[0]?.senderEmail || '')
   const [selectedEmailTemplateTitle, setSelectedEmailTemplateTitle] = useState<string>('')
   const [selectedWhatsappSenderId, setSelectedWhatsappSenderId] = useState<string>(initialDraft?.selectedWhatsappSenderId || '')
   const [selectedWhatsappTemplateTitle, setSelectedWhatsappTemplateTitle] = useState<string>('')
   const [whatsappVariableBindings, setWhatsappVariableBindings] = useState<Record<string, VariableBinding>>(initialDraft?.whatsappVariableBindings || {})
+  const [whatsappTemplatePreview, setWhatsappTemplatePreview] = useState<{
+    name: string
+    language: string
+    header: string
+    body: string
+    footer: string
+    buttons: string[]
+  } | null>(null)
+  const [isWhatsappPreviewLoading, setIsWhatsappPreviewLoading] = useState<boolean>(false)
+  const [whatsappPreviewError, setWhatsappPreviewError] = useState<string | null>(null)
   
   // Attachments
   const [attachments, setAttachments] = useState<File[]>([])
@@ -153,16 +159,12 @@ export default function SendPage({ onNavigate }: SendPageProps) {
 
   // Theme mapping
   const themeMap = {
-    whatsapp: { bg: 'bg-green-50', border: 'border-green-200', accent: 'text-green-600', btnClass: 'btn-success' },
-    email: { bg: 'bg-red-50', border: 'border-red-200', accent: 'text-red-600', btnClass: 'btn-danger' },
-    none: { bg: 'bg-blue-50', border: 'border-blue-200', accent: 'text-blue-600', btnClass: 'btn-primary' }
+    whatsapp: { bg: 'bg-green-50', border: 'border-green-200', accent: 'text-green-600', btnClass: 'btn-whatsapp' },
+    email:    { bg: 'bg-red-50',   border: 'border-red-200',   accent: 'text-red-600',   btnClass: 'btn-gmail'    },
+    none:     { bg: 'bg-blue-50',  border: 'border-blue-200',  accent: 'text-blue-600',  btnClass: 'btn-primary'  }
   } as const
   const currentTheme = themeMap[channel]
-  const activeWhatsappSender = accountSettings.whatsappSenders.find(sender =>
-    sender.phoneNumber === accountSettings.whatsapp.phoneNumber &&
-    sender.phoneNumberId === accountSettings.whatsapp.phoneNumberId &&
-    sender.businessId === accountSettings.whatsapp.businessId
-  )
+  const activeWhatsappSender = accountSettings.whatsappSenders[0] || null
   const configuredWhatsappSenders = React.useMemo(
     () => accountSettings.whatsappSenders.filter(sender => buildWhatsappStatus(sender).isConfigured),
     [accountSettings.whatsappSenders, buildWhatsappStatus]
@@ -178,24 +180,31 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     null
   const whatsappStatus = buildWhatsappStatus(effectiveWhatsappSender)
   const isWhatsappEnabled = configuredWhatsappSenders.length > 0
-  const isEmailEnabled = Boolean(accountSettings.gmail.senderEmail && accountSettings.gmail.appPassword)
+  const isEmailEnabled = accountSettings.gmailSenders.some(sender => Boolean(sender.senderEmail && sender.appPassword))
   const selectedEmailSenderRecord = accountSettings.gmailSenders.find(sender => sender.senderEmail === selectedEmailSender) || null
   const emailTemplates = selectedEmailSenderRecord?.templates || []
   const selectedEmailTemplate = emailTemplates.find(template => template.title === selectedEmailTemplateTitle) || null
   const whatsappTemplates = effectiveWhatsappSender?.templates || []
   const selectedWhatsappTemplate = whatsappTemplates.find(template => template.title === selectedWhatsappTemplateTitle) || null
   const whatsappTemplateVariables = React.useMemo(() => {
-    if (!selectedWhatsappTemplate) return [] as string[]
+    if (!whatsappTemplatePreview) return [] as string[]
 
     const vars = new Set<string>()
-    const curlyMatches = selectedWhatsappTemplate.content.matchAll(/\{([^{}]+)\}/g)
-    for (const match of curlyMatches) {
+    const searchableText = [
+      whatsappTemplatePreview.header,
+      whatsappTemplatePreview.body,
+      whatsappTemplatePreview.footer,
+      ...(whatsappTemplatePreview.buttons || [])
+    ].join('\n')
+
+    const matches = searchableText.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)
+    for (const match of matches) {
       const variable = match[1].trim()
       if (variable) vars.add(variable)
     }
 
     return Array.from(vars)
-  }, [selectedWhatsappTemplate])
+  }, [whatsappTemplatePreview])
 
   useEffect(() => {
     if (!token) return
@@ -207,14 +216,8 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       .then((loaded) => {
         if (!mounted) return
         setAccountSettings(loaded)
-        setSelectedEmailSender(prev => prev || loaded.gmail.senderEmail)
-
-        const activeSender = loaded.whatsappSenders.find(sender =>
-          sender.phoneNumber === loaded.whatsapp.phoneNumber &&
-          sender.phoneNumberId === loaded.whatsapp.phoneNumberId &&
-          sender.businessId === loaded.whatsapp.businessId
-        )
-        setSelectedWhatsappSenderId(prev => prev || activeSender?.id || loaded.whatsappSenders[0]?.id || '')
+        setSelectedEmailSender(prev => prev || loaded.gmailSenders[0]?.senderEmail || '')
+        setSelectedWhatsappSenderId(prev => prev || loaded.whatsappSenders[0]?.id || '')
       })
       .catch(() => {
       })
@@ -332,8 +335,45 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       setMessage('')
       return
     }
-    setMessage(selectedWhatsappTemplate.content)
+    setMessage(selectedWhatsappTemplate.title)
   }, [channel, selectedWhatsappTemplate])
+
+  useEffect(() => {
+    if (channel !== 'whatsapp') return
+    if (!token) return
+
+    if (!effectiveWhatsappSender?.id || !selectedWhatsappTemplateTitle) {
+      setWhatsappTemplatePreview(null)
+      setWhatsappPreviewError(null)
+      setIsWhatsappPreviewLoading(false)
+      return
+    }
+
+    let mounted = true
+    setIsWhatsappPreviewLoading(true)
+    setWhatsappPreviewError(null)
+
+    whatsappTemplateService
+      .getTemplatePreview(token, effectiveWhatsappSender.id, selectedWhatsappTemplateTitle)
+      .then((preview) => {
+        if (!mounted) return
+        setWhatsappTemplatePreview(preview)
+      })
+      .catch((error: unknown) => {
+        if (!mounted) return
+        const errorMessage = error instanceof Error ? error.message : 'Erro ao carregar preview da template.'
+        setWhatsappTemplatePreview(null)
+        setWhatsappPreviewError(errorMessage)
+      })
+      .finally(() => {
+        if (!mounted) return
+        setIsWhatsappPreviewLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [channel, token, effectiveWhatsappSender?.id, selectedWhatsappTemplateTitle])
 
   useEffect(() => {
     if (channel !== 'whatsapp') return
@@ -496,6 +536,16 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     if (phoneColumn === columnName) setPhoneColumn('')
     if (emailColumn === columnName) setEmailColumn('')
     if (fileColumn === columnName) setFileColumn('')
+    setWhatsappVariableBindings(prev => {
+      const next = { ...prev }
+      Object.keys(next).forEach(variable => {
+        const binding = next[variable]
+        if (binding.mode === 'column' && binding.column === columnName) {
+          next[variable] = { ...binding, column: '' }
+        }
+      })
+      return next
+    })
   }
 
   function renameColumn(oldName: string, newName: string) {
@@ -519,6 +569,16 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     if (phoneColumn === oldName) setPhoneColumn(newName)
     if (emailColumn === oldName) setEmailColumn(newName)
     if (fileColumn === oldName) setFileColumn(newName)
+    setWhatsappVariableBindings(prev => {
+      const next = { ...prev }
+      Object.keys(next).forEach(variable => {
+        const binding = next[variable]
+        if (binding.mode === 'column' && binding.column === oldName) {
+          next[variable] = { ...binding, column: newName }
+        }
+      })
+      return next
+    })
     setEditingColumn(null)
     setNewColumnName('')
   }
@@ -603,12 +663,13 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       }
 
       const missingColumnBinding = whatsappTemplateVariables.find(variable => {
-        const binding = whatsappVariableBindings[variable]
-        return binding?.mode === 'column' && !binding.column
+        const binding = whatsappVariableBindings[variable] || { mode: 'column' as const, column: '', value: '' }
+        if (binding.mode === 'column') return !binding.column
+        return binding.value.trim().length === 0
       })
 
       if (missingColumnBinding) {
-        setErrorModal({ title: 'Variável sem vínculo', message: `Selecione uma coluna para a variável "${missingColumnBinding}" ou altere para valor fixo.` })
+        setErrorModal({ title: 'Variável sem vínculo', message: `Configure a variável "{{${missingColumnBinding}}}" com uma coluna ou valor fixo antes de enviar.` })
         return
       }
     }
@@ -796,7 +857,6 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     
     const payload: any = {
       channel,
-      message,
       rows: rowsToSend.length > 0 ? rowsToSend : rows,
       contact_column: contactColumn,
       file_column: fileColumn || null,
@@ -805,26 +865,32 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     }
 
     if (channel === 'email') {
+      payload.message = message
       payload.subject = subject
       payload.email_sender = selectedEmailSender
-      payload.app_password = accountSettings.gmail.appPassword
+      payload.app_password = selectedEmailSenderRecord?.appPassword || ''
       payload.email_template_title = selectedEmailTemplateTitle || null
     }
 
     if (channel === 'whatsapp') {
       payload.whatsapp_sender_id = effectiveWhatsappSender?.id || null
-      payload.phone_number = effectiveWhatsappSender?.phoneNumber || ''
-      payload.whatsapp_access_token = effectiveWhatsappSender?.accessToken || ''
-      payload.whatsapp_phone_number_id = effectiveWhatsappSender?.phoneNumberId || ''
-      payload.whatsapp_business_id = effectiveWhatsappSender?.businessId || ''
       payload.whatsapp_template_title = selectedWhatsappTemplateTitle
+      payload.whatsapp_template_language_code = 'pt_BR'
+      payload.whatsapp_template_parameter_format = 'NAMED'
       payload.whatsapp_template_variables = whatsappTemplateVariables.map(variable => {
         const binding = whatsappVariableBindings[variable] || { mode: 'fixed', column: '', value: '' }
+        if (binding.mode === 'column') {
+          return {
+            name: variable,
+            mode: 'column',
+            column: binding.column
+          }
+        }
+
         return {
-          variable,
-          mode: binding.mode,
-          column: binding.mode === 'column' ? binding.column : null,
-          value: binding.mode === 'fixed' ? binding.value : null
+          name: variable,
+          mode: 'fixed',
+          value: binding.value
         }
       })
     }
@@ -873,10 +939,10 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         <div>
           <div className="text-sm font-medium mb-1">Canal</div>
           <div className="flex gap-2">
-            <label className={`btn ${channel === 'whatsapp' ? 'btn-success' : 'btn-ghost'} ${!isWhatsappEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <label className={`btn ${channel === 'whatsapp' ? 'btn-whatsapp' : 'btn-ghost'} ${!isWhatsappEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <input className="hidden" type="radio" name="channel" checked={channel === 'whatsapp'} disabled={!isWhatsappEnabled} onChange={() => setChannel('whatsapp')} /> WhatsApp
             </label>
-            <label className={`btn ${channel === 'email' ? 'btn-danger' : 'btn-ghost'} ${!isEmailEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <label className={`btn ${channel === 'email' ? 'btn-gmail' : 'btn-ghost'} ${!isEmailEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <input className="hidden" type="radio" name="channel" checked={channel === 'email'} disabled={!isEmailEnabled} onChange={() => setChannel('email')} /> Email
             </label>
           </div>
@@ -1009,6 +1075,8 @@ export default function SendPage({ onNavigate }: SendPageProps) {
                 onChange={e => {
                   setSelectedWhatsappSenderId(e.target.value)
                   setSelectedWhatsappTemplateTitle('')
+                  setWhatsappTemplatePreview(null)
+                  setWhatsappPreviewError(null)
                   setWhatsappVariableBindings({})
                 }}
                 className="input w-full"
@@ -1024,7 +1092,11 @@ export default function SendPage({ onNavigate }: SendPageProps) {
               <div className="text-sm font-medium mb-1">Template WhatsApp</div>
               <select
                 value={selectedWhatsappTemplateTitle}
-                onChange={e => setSelectedWhatsappTemplateTitle(e.target.value)}
+                onChange={e => {
+                  setSelectedWhatsappTemplateTitle(e.target.value)
+                  setWhatsappTemplatePreview(null)
+                  setWhatsappPreviewError(null)
+                }}
                 className="input w-full"
               >
                 <option value="">Selecione a template...</option>
@@ -1033,7 +1105,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
                 ))}
               </select>
               <div className="text-xs text-slate-500 mt-1">
-                As variáveis serão exibidas após selecionar uma template.
+                Selecione o título da template já cadastrada e aprovada na Meta.
               </div>
             </div>
           </div>
@@ -1053,99 +1125,33 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         </div>
       )}
 
-      <MessageSection
-        headers={headers}
-        message={message}
-        readOnly={channel === 'whatsapp'}
-        readOnlyHint={channel === 'whatsapp' ? 'Para WhatsApp, selecione a template e configure as variáveis abaixo.' : ''}
-        theme={currentTheme}
-        onMessageChange={setMessage}
-        onInsertPlaceholder={insertPlaceholder}
-      />
+      {channel !== 'whatsapp' && (
+        <MessageSection
+          headers={headers}
+          message={message}
+          theme={currentTheme}
+          onMessageChange={setMessage}
+          onInsertPlaceholder={insertPlaceholder}
+        />
+      )}
 
       {channel === 'whatsapp' && (
-        <div className={`mb-4 p-4 rounded ${currentTheme.bg} border ${currentTheme.border} space-y-3`}>
-          <h3 className="font-medium">Variáveis da template WhatsApp</h3>
-
-          {!selectedWhatsappTemplate ? (
-            <p className="text-sm text-slate-500">Selecione uma template na seção de canal para configurar variáveis.</p>
-          ) : whatsappTemplateVariables.length === 0 ? (
-            <p className="text-sm text-slate-500">A template selecionada não possui variáveis.</p>
-          ) : (
-            <div className="space-y-3">
-              {whatsappTemplateVariables.map(variable => {
-                const binding = whatsappVariableBindings[variable] || { mode: 'column' as const, column: '', value: '' }
-                return (
-                  <div key={variable} className="rounded border border-green-200 bg-white p-3">
-                    <div className="text-sm font-medium text-slate-800 mb-2">{`{${variable}}`}</div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <select
-                        value={binding.mode}
-                        onChange={e => {
-                          const mode = e.target.value as 'column' | 'fixed'
-                          setWhatsappVariableBindings(prev => ({
-                            ...prev,
-                            [variable]: {
-                              ...prev[variable],
-                              mode,
-                              column: mode === 'column' ? prev[variable]?.column || '' : '',
-                              value: mode === 'fixed' ? prev[variable]?.value || '' : ''
-                            }
-                          }))
-                        }}
-                        className="input"
-                      >
-                        <option value="column">Vincular com coluna</option>
-                        <option value="fixed">Valor fixo</option>
-                      </select>
-
-                      {binding.mode === 'column' ? (
-                        <select
-                          value={binding.column}
-                          onChange={e => {
-                            const column = e.target.value
-                            setWhatsappVariableBindings(prev => ({
-                              ...prev,
-                              [variable]: {
-                                ...prev[variable],
-                                mode: 'column',
-                                column
-                              }
-                            }))
-                          }}
-                          className="input md:col-span-2"
-                        >
-                          <option value="">Selecione a coluna</option>
-                          {headers.map(header => (
-                            <option key={header} value={header}>{header}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          value={binding.value}
-                          onChange={e => {
-                            const value = e.target.value
-                            setWhatsappVariableBindings(prev => ({
-                              ...prev,
-                              [variable]: {
-                                ...prev[variable],
-                                mode: 'fixed',
-                                value
-                              }
-                            }))
-                          }}
-                          placeholder="Digite o valor fixo"
-                          className="input md:col-span-2"
-                        />
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        <WhatsAppTemplatePreviewSection
+          preview={whatsappTemplatePreview}
+          variables={whatsappTemplateVariables}
+          headers={headers}
+          bindings={whatsappVariableBindings}
+          isLoading={isWhatsappPreviewLoading}
+          error={whatsappPreviewError}
+          selectedTemplateTitle={selectedWhatsappTemplateTitle}
+          theme={currentTheme}
+          onBindingChange={(variable, binding) => {
+            setWhatsappVariableBindings(prev => ({
+              ...prev,
+              [variable]: binding
+            }))
+          }}
+        />
       )}
 
       

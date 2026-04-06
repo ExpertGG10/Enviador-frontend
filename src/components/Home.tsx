@@ -1,22 +1,82 @@
 import React from 'react'
 
-type HomeProps = { onNavigate?: (page: 'home' | 'send' | 'account' | 'contact') => void }
+type HomeProps = {
+  onNavigate?: (page: 'home' | 'send' | 'account' | 'contact') => void
+}
 
 export default function Home({ onNavigate }: HomeProps) {
   return (
-    <section className="py-12">
-      <div className="card p-8 flex flex-col md:flex-row items-center gap-6">
-        <div className="flex-1">
-          <div className="kicker mb-2">Plataforma</div>
-          <h1 className="h1 mb-4">Envie mensagens por WhatsApp ou Email com facilidade</h1>
-          <p className="text-slate-600 mb-6 max-w-xl">Prepare listas, edite mensagens com placeholders e envie em massa com controle e visibilidade.</p>
-          <div className="flex gap-3">
-            <button onClick={() => onNavigate?.('send')} className="btn btn-primary">Criar envio</button>
-            <button className="btn btn-ghost">Documentação</button>
-          </div>
+    <main className="py-20 px-6">
+      {/* HERO */}
+      <section className="text-center max-w-4xl mx-auto">
+        <div className="flex justify-center gap-3 mb-6">
+          <span className="px-3 py-1 rounded-full border text-sm">WhatsApp</span>
+          <span className="px-3 py-1 rounded-full border text-sm">Email</span>
         </div>
-        <div className="hidden md:block w-64 h-40 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg flex items-center justify-center text-indigo-600 font-semibold">Preview</div>
-      </div>
-    </section>
+
+        <h1 className="text-5xl font-extrabold leading-tight mb-6">
+          Envie mensagens por{' '}
+          <span className="text-green-600">WhatsApp</span>{' '}
+          ou{' '}
+          <span className="text-blue-600">Email</span>{' '}
+          com facilidade
+        </h1>
+
+        <p className="text-slate-600 text-lg mb-8">
+          Prepare listas, edite mensagens com placeholders e envie em massa
+          com controle e visibilidade.
+        </p>
+
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={() => onNavigate?.('send')}
+            className="btn btn-primary px-6"
+          >
+            Começar agora
+          </button>
+          <button className="btn btn-ghost px-6">
+            Entrar na conta
+          </button>
+        </div>
+      </section>
+
+      {/* COMO FUNCIONA */}
+      <section className="mt-24">
+        <h2 className="text-center text-2xl font-bold mb-10">Como funciona</h2>
+
+        <div className="grid md:grid-cols-4 gap-6 max-w-6xl mx-auto">
+          <Card
+            title="Listas"
+            desc="Organize seus contatos em listas segmentadas"
+            icon="👥"
+          />
+          <Card
+            title="Mensagem"
+            desc="Crie mensagens com placeholders dinâmicos"
+            icon="✏️"
+          />
+          <Card
+            title="Envio"
+            desc="Dispare em massa com controle total"
+            icon="📤"
+          />
+          <Card
+            title="Respostas"
+            desc="Acompanhe respostas em tempo real"
+            icon="📥"
+          />
+        </div>
+      </section>
+    </main>
   )
-} 
+}
+
+function Card({ title, desc, icon }: { title: string; desc: string; icon: string }) {
+  return (
+    <div className="border rounded-xl p-6 hover:shadow-md transition bg-white">
+      <div className="text-3xl mb-4">{icon}</div>
+      <h3 className="font-semibold mb-2">{title}</h3>
+      <p className="text-slate-600 text-sm">{desc}</p>
+    </div>
+  )
+}

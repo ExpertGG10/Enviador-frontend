@@ -1,11 +1,7 @@
-import { AccountSettings, DEFAULT_ACCOUNT_SETTINGS, GmailSenderCard, MessageTemplate, WhatsAppSenderCard, WhatsAppSettings } from '../types/accountSettings'
+import { AccountSettings, DEFAULT_ACCOUNT_SETTINGS, GmailSenderCard, MessageTemplate, WhatsAppSenderCard } from '../types/accountSettings'
 
-const STORAGE_KEY = 'enviador_account_settings_v1'
-
-function sanitizeTemplates(templates: string[]): string[] {
-  const normalized = templates.map(t => t.trim()).filter(Boolean)
-  return Array.from(new Set(normalized))
-}
+const STORAGE_KEY = 'enviador_account_settings_v2'
+export const ACCOUNT_SETTINGS_UPDATED_EVENT = 'enviador:account-settings-updated'
 
 type LooseGmailSenderCard = Omit<Partial<GmailSenderCard>, 'templates'> & {
   templates?: Array<string | MessageTemplate>
@@ -51,99 +47,43 @@ function sanitizeGmailSenderCard(card: LooseGmailSenderCard): GmailSenderCard | 
   }
 }
 
-function sanitizeGmailSenders(cards: Array<Partial<GmailSenderCard>> | undefined, fallback: { senderEmail: string; appPassword: string }): GmailSenderCard[] {
-  const source = cards && cards.length > 0 ? cards : []
-  const normalized = source
+function sanitizeGmailSenders(cards: Array<Partial<GmailSenderCard>> | undefined): GmailSenderCard[] {
+  return (cards || [])
     .map(sanitizeGmailSenderCard)
     .filter((card): card is GmailSenderCard => Boolean(card))
-
-  const fallbackEmail = fallback.senderEmail.trim()
-  const fallbackPassword = fallback.appPassword
-  const canUseFallback = Boolean(fallbackEmail && fallbackPassword)
-
-  const hasActive = normalized.some(card => card.senderEmail === fallbackEmail)
-  if (canUseFallback && !hasActive) {
-    const active = sanitizeGmailSenderCard({
-      id: `active-gmail-${fallbackEmail || Date.now()}`,
-      senderEmail: fallbackEmail,
-      appPassword: fallbackPassword,
-      templates: []
-    })
-    if (active) normalized.unshift(active)
-  }
-
-  return normalized
 }
 
 function sanitizeWhatsappSenderCard(card: LooseWhatsappSenderCard): WhatsAppSenderCard | null {
   const phoneNumber = card.phoneNumber?.trim() || ''
   const accessToken = card.accessToken?.trim() || ''
+  const accessTokenMasked = card.accessTokenMasked?.trim() || ''
   const phoneNumberId = card.phoneNumberId?.trim() || ''
-  const businessId = card.businessId?.trim() || ''
+  const wabaId = card.wabaId?.trim() || ''
   const templates = sanitizeCardTemplates(card.templates)
 
-  if (!phoneNumber && !accessToken && !phoneNumberId && !businessId && templates.length === 0) return null
+  if (!phoneNumber && !accessToken && !accessTokenMasked && !phoneNumberId && !wabaId && templates.length === 0) return null
 
   return {
     id: card.id?.trim() || `${phoneNumber || 'sender'}-${phoneNumberId || Date.now()}`,
     phoneNumber,
     accessToken,
+    accessTokenMasked: accessTokenMasked || undefined,
     phoneNumberId,
-    businessId,
+    wabaId,
     templates: sanitizeCardTemplates(card.templates)
   }
 }
 
-function sanitizeWhatsappSenders(cards: Array<Partial<WhatsAppSenderCard>> | undefined, fallback: WhatsAppSettings): WhatsAppSenderCard[] {
-  const source = cards && cards.length > 0 ? cards : []
-  const normalized = source
+function sanitizeWhatsappSenders(cards: Array<Partial<WhatsAppSenderCard>> | undefined): WhatsAppSenderCard[] {
+  return (cards || [])
     .map(sanitizeWhatsappSenderCard)
     .filter((card): card is WhatsAppSenderCard => Boolean(card))
-
-  const hasActive = normalized.some(card =>
-    card.phoneNumber === fallback.phoneNumber &&
-    card.phoneNumberId === fallback.phoneNumberId &&
-    card.businessId === fallback.businessId
-  )
-
-  if (!hasActive) {
-    const activeCard = sanitizeWhatsappSenderCard({
-      id: `active-${fallback.phoneNumberId || fallback.phoneNumber || Date.now()}`,
-      phoneNumber: fallback.phoneNumber,
-      accessToken: fallback.accessToken,
-      phoneNumberId: fallback.phoneNumberId,
-      businessId: fallback.businessId,
-      templates: fallback.templates
-    })
-    if (activeCard) normalized.unshift(activeCard)
-  }
-
-  return normalized
 }
 
 function normalizeSettings(input: Partial<AccountSettings> | null | undefined): AccountSettings {
-  const gmail = {
-    senderEmail: input?.gmail?.senderEmail?.trim() || '',
-    appPassword: input?.gmail?.appPassword || ''
-  }
-
   return {
-    gmail,
-    gmailSenders: sanitizeGmailSenders(input?.gmailSenders, gmail),
-    whatsapp: {
-      phoneNumber: input?.whatsapp?.phoneNumber?.trim() || '',
-      accessToken: input?.whatsapp?.accessToken?.trim() || '',
-      phoneNumberId: input?.whatsapp?.phoneNumberId?.trim() || '',
-      businessId: input?.whatsapp?.businessId?.trim() || '',
-      templates: sanitizeTemplates(input?.whatsapp?.templates || [])
-    },
-    whatsappSenders: sanitizeWhatsappSenders(input?.whatsappSenders, {
-      phoneNumber: input?.whatsapp?.phoneNumber?.trim() || '',
-      accessToken: input?.whatsapp?.accessToken?.trim() || '',
-      phoneNumberId: input?.whatsapp?.phoneNumberId?.trim() || '',
-      businessId: input?.whatsapp?.businessId?.trim() || '',
-      templates: sanitizeTemplates(input?.whatsapp?.templates || [])
-    })
+    gmailSenders: sanitizeGmailSenders(input?.gmailSenders),
+    whatsappSenders: sanitizeWhatsappSenders(input?.whatsappSenders)
   }
 }
 
@@ -165,18 +105,20 @@ export function saveAccountSettings(settings: AccountSettings): AccountSettings 
 
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized))
+    window.dispatchEvent(new CustomEvent(ACCOUNT_SETTINGS_UPDATED_EVENT, { detail: normalized }))
   }
 
   return normalized
 }
 
-export function getWhatsAppConfigStatus(whatsapp: WhatsAppSettings): { isConfigured: boolean; missingFields: string[] } {
+export function getWhatsAppConfigStatus(whatsapp: Pick<WhatsAppSenderCard, 'phoneNumber' | 'accessToken' | 'phoneNumberId' | 'wabaId' | 'accessTokenMasked'>): { isConfigured: boolean; missingFields: string[] } {
   const missingFields: string[] = []
+  const accessTokenValue = whatsapp.accessToken.trim() || whatsapp.accessTokenMasked?.trim() || ''
 
   if (!whatsapp.phoneNumber.trim()) missingFields.push('Número de telefone')
-  if (!whatsapp.accessToken.trim()) missingFields.push('Token de acesso')
+  if (!accessTokenValue) missingFields.push('Token de acesso')
   if (!whatsapp.phoneNumberId.trim()) missingFields.push('Phone Number ID')
-  if (!whatsapp.businessId.trim()) missingFields.push('Business ID')
+  if (!whatsapp.wabaId.trim()) missingFields.push('WABA ID')
 
   return {
     isConfigured: missingFields.length === 0,
