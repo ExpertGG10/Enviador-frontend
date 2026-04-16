@@ -956,9 +956,8 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         whatsappPayloadObj.whatsapp_button_attachment_bindings = buttonAttachmentBindings
       }
 
-      whatsappPayload = whatsappPayloadObj
       attachments.forEach(f => form.append('files', f, f.name))
-      form.append('payload', JSON.stringify(whatsappPayload))
+      form.append('payload', JSON.stringify(whatsappPayloadObj))
     }
 
     try {
