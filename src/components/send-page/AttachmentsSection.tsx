@@ -6,6 +6,9 @@ interface Props {
   headers: string[]
   fileColumn: string
   matchMode: 'igual' | 'contem' | 'comeca_com' | 'termina_com'
+  channel?: 'whatsapp' | 'email' | 'none'
+  whatsappButtons?: Array<{ label: string; payload: string }>
+  whatsappAttachmentBindings?: Record<string, { buttonPayload: string; caption: string }>
   theme: {
     bg: string
     border: string
@@ -17,6 +20,7 @@ interface Props {
   onClearAll: () => void
   onFileColumnChange: (column: string) => void
   onMatchModeChange: (mode: 'igual' | 'contem' | 'comeca_com' | 'termina_com') => void
+  onWhatsappAttachmentBindingChange?: (fileName: string, binding: { buttonPayload: string; caption: string }) => void
 }
 
 export function AttachmentsSection({
@@ -24,12 +28,16 @@ export function AttachmentsSection({
   headers,
   fileColumn,
   matchMode,
+  channel = 'none',
+  whatsappButtons = [],
+  whatsappAttachmentBindings = {},
   theme,
   onAddFiles,
   onRemoveFile,
   onClearAll,
   onFileColumnChange,
-  onMatchModeChange
+  onMatchModeChange,
+  onWhatsappAttachmentBindingChange
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -102,6 +110,53 @@ export function AttachmentsSection({
                 </select>
               </div>
             </div>
+
+            {channel === 'whatsapp' && attachments.length > 0 && (
+              <div className="mt-4 rounded border border-green-200 bg-white p-3 space-y-3">
+                <div className="text-sm font-medium">Vincular anexo ao botão do WhatsApp</div>
+                {whatsappButtons.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    Esta template não possui botões na prévia. Selecione uma template com botão para vincular anexos.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {attachments.map((file) => {
+                      const binding = whatsappAttachmentBindings[file.name] || { buttonPayload: '', caption: '' }
+                      return (
+                        <div key={file.name} className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                          <div className="text-xs text-slate-700 break-all">{file.name}</div>
+                          <select
+                            value={binding.buttonPayload}
+                            onChange={e => onWhatsappAttachmentBindingChange?.(file.name, {
+                              ...binding,
+                              buttonPayload: e.target.value
+                            })}
+                            className="input"
+                          >
+                            <option value="">Selecione o botão</option>
+                            {whatsappButtons.map((button) => (
+                              <option key={button.payload} value={button.payload}>
+                                {button.label}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={binding.caption}
+                            onChange={e => onWhatsappAttachmentBindingChange?.(file.name, {
+                              ...binding,
+                              caption: e.target.value
+                            })}
+                            placeholder="Legenda opcional"
+                            className="input"
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className='mt-4'>
               <div className="text-sm font-medium mb-2">Opções de vinculação:</div>

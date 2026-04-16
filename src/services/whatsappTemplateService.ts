@@ -8,7 +8,63 @@ export type WhatsAppTemplatePreview = {
   header: string
   body: string
   footer: string
-  buttons: string[]
+  buttons: Array<{
+    label: string
+    payload: string
+  }>
+}
+
+type RawWhatsAppTemplateButton =
+  | string
+  | {
+      text?: string
+      title?: string
+      label?: string
+      payload?: string
+      button_payload?: string
+      quick_reply_payload?: string
+    }
+
+type RawWhatsAppTemplatePreview = Omit<WhatsAppTemplatePreview, 'buttons'> & {
+  buttons?: RawWhatsAppTemplateButton[]
+}
+
+function normalizeButtonPayload(label: string, index: number): string {
+  const normalized = label
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace(/[^A-Za-z0-9_]/g, '')
+    .toUpperCase()
+
+  return normalized || `BUTTON_${index + 1}`
+}
+
+function normalizeButton(button: RawWhatsAppTemplateButton, index: number): { label: string; payload: string } {
+  if (typeof button === 'string') {
+    const label = button.trim() || `Botao ${index + 1}`
+    return {
+      label,
+      payload: normalizeButtonPayload(label, index)
+    }
+  }
+
+  const label = (button.text || button.title || button.label || button.payload || button.button_payload || '').trim() || `Botao ${index + 1}`
+  const payload = (button.payload || button.button_payload || button.quick_reply_payload || '').trim() || normalizeButtonPayload(label, index)
+
+  return { label, payload }
+}
+
+function normalizePreview(preview: RawWhatsAppTemplatePreview): WhatsAppTemplatePreview {
+  return {
+    name: preview.name || '',
+    language: preview.language || 'pt_BR',
+    header: preview.header || '',
+    body: preview.body || '',
+    footer: preview.footer || '',
+    buttons: Array.isArray(preview.buttons)
+      ? preview.buttons.map((button, index) => normalizeButton(button, index))
+      : []
+  }
 }
 
 async function parseError(response: Response): Promise<string> {
@@ -38,6 +94,7 @@ export const whatsappTemplateService = {
       throw new Error(await parseError(response))
     }
 
-    return (await response.json()) as WhatsAppTemplatePreview
+    const raw = (await response.json()) as RawWhatsAppTemplatePreview
+    return normalizePreview(raw)
   }
 }

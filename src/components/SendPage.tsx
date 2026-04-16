@@ -15,7 +15,7 @@ import { ColumnModals } from './send-page/ColumnModals'
 import { parseFile, headersEqual, type Row } from '../utils/fileUtils'
 import { getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
 import { accountSettingsService } from '../services/accountSettingsService'
-import { whatsappTemplateService } from '../services/whatsappTemplateService'
+import { whatsappTemplateService, type WhatsAppTemplatePreview } from '../services/whatsappTemplateService'
 import { AccountSettings } from '../types/accountSettings'
 
 type SendDraft = {
@@ -96,19 +96,13 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   const [selectedWhatsappSenderId, setSelectedWhatsappSenderId] = useState<string>(initialDraft?.selectedWhatsappSenderId || '')
   const [selectedWhatsappTemplateTitle, setSelectedWhatsappTemplateTitle] = useState<string>('')
   const [whatsappVariableBindings, setWhatsappVariableBindings] = useState<Record<string, VariableBinding>>(initialDraft?.whatsappVariableBindings || {})
-  const [whatsappTemplatePreview, setWhatsappTemplatePreview] = useState<{
-    name: string
-    language: string
-    header: string
-    body: string
-    footer: string
-    buttons: string[]
-  } | null>(null)
+  const [whatsappTemplatePreview, setWhatsappTemplatePreview] = useState<WhatsAppTemplatePreview | null>(null)
   const [isWhatsappPreviewLoading, setIsWhatsappPreviewLoading] = useState<boolean>(false)
   const [whatsappPreviewError, setWhatsappPreviewError] = useState<string | null>(null)
   
   // Attachments
   const [attachments, setAttachments] = useState<File[]>([])
+  const [whatsappAttachmentBindings, setWhatsappAttachmentBindings] = useState<Record<string, { buttonPayload: string; caption: string }>>({})
   const [fileColumn, setFileColumn] = useState<string>(initialDraft?.fileColumn || '')
   const [matchMode, setMatchMode] = useState<'igual' | 'contem' | 'comeca_com' | 'termina_com'>(initialDraft?.matchMode || 'contem')
   
@@ -186,6 +180,10 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   const selectedEmailTemplate = emailTemplates.find(template => template.title === selectedEmailTemplateTitle) || null
   const whatsappTemplates = effectiveWhatsappSender?.templates || []
   const selectedWhatsappTemplate = whatsappTemplates.find(template => template.title === selectedWhatsappTemplateTitle) || null
+  const whatsappTemplateButtons = React.useMemo(
+    () => whatsappTemplatePreview?.buttons || [],
+    [whatsappTemplatePreview]
+  )
   const whatsappTemplateVariables = React.useMemo(() => {
     if (!whatsappTemplatePreview) return [] as string[]
 
@@ -194,7 +192,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       whatsappTemplatePreview.header,
       whatsappTemplatePreview.body,
       whatsappTemplatePreview.footer,
-      ...(whatsappTemplatePreview.buttons || [])
+      ...(whatsappTemplatePreview.buttons || []).flatMap(button => [button.label, button.payload])
     ].join('\n')
 
     const matches = searchableText.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)
@@ -386,6 +384,23 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       return next
     })
   }, [channel, whatsappTemplateVariables])
+
+  useEffect(() => {
+    setWhatsappAttachmentBindings(prev => {
+      const next: Record<string, { buttonPayload: string; caption: string }> = {}
+      const availablePayloads = new Set(whatsappTemplateButtons.map(button => button.payload))
+
+      attachments.forEach(file => {
+        const existing = prev[file.name] || { buttonPayload: '', caption: '' }
+        next[file.name] = {
+          buttonPayload: availablePayloads.has(existing.buttonPayload) ? existing.buttonPayload : '',
+          caption: existing.caption || ''
+        }
+      })
+
+      return next
+    })
+  }, [attachments, whatsappTemplateButtons])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -628,6 +643,39 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     setMessage(prev => prev + ' {' + placeholder + '}')
   }
 
+  function normalizeAttachmentReference(name: string): string {
+    if (!name) return ''
+    let normalized = String(name).trim()
+    normalized = normalized.replace(/^[\s\-→>»•]+/, '')
+    normalized = normalized.trim()
+    normalized = normalized.replace(/\.(jpg|jpeg|png|gif|pdf|docx|doc|xlsx|xls|zip|txt)$/i, '')
+    return normalized.toLowerCase()
+  }
+
+  function attachmentMatchesByMode(fileNameValue: string, fileName: string): boolean {
+    const normValue = normalizeAttachmentReference(fileNameValue)
+    const normFile = normalizeAttachmentReference(fileName)
+
+    switch (matchMode) {
+      case 'igual':
+        return normValue === normFile
+      case 'comeca_com':
+        return normFile.startsWith(normValue)
+      case 'termina_com':
+        return normFile.endsWith(normValue)
+      case 'contem':
+      default:
+        return normFile.includes(normValue)
+    }
+  }
+
+  function createIdempotencyKey(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+    return `wa-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  }
+
   async function handleSend() {
     if (channel === 'none') {
       setErrorModal({ title: 'Campo obrigatório', message: 'Selecione um canal antes de enviar.' })
@@ -671,6 +719,25 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       if (missingColumnBinding) {
         setErrorModal({ title: 'Variável sem vínculo', message: `Configure a variável "{{${missingColumnBinding}}}" com uma coluna ou valor fixo antes de enviar.` })
         return
+      }
+
+      if (attachments.length > 0) {
+        if (whatsappTemplateButtons.length === 0) {
+          setErrorModal({
+            title: 'Template sem botão',
+            message: 'Para enviar anexos por WhatsApp, selecione uma template que contenha ao menos um botão.'
+          })
+          return
+        }
+
+        const fileWithoutButton = attachments.find(file => !whatsappAttachmentBindings[file.name]?.buttonPayload)
+        if (fileWithoutButton) {
+          setErrorModal({
+            title: 'Vínculo pendente',
+            message: `Vincule o anexo "${fileWithoutButton.name}" a um botão da template antes de enviar.`
+          })
+          return
+        }
       }
     }
 
@@ -744,36 +811,6 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     let bulkWarning = false
 
     if (fileColumn) {
-      const _normalize = (name: string): string => {
-        if (!name) return ''
-        let s = String(name).trim()
-        s = s.replace(/^[\s\-→>»•]+/, '')
-        s = s.trim()
-        s = s.replace(/\.(jpg|jpeg|png|gif|pdf|docx|doc|xlsx|xls|zip|txt)$/i, '')
-        return s.toLowerCase()
-      }
-
-      const _matchesFile = (fileNameValue: string, fileName: string): boolean => {
-        const normValue = _normalize(fileNameValue)
-        const normFile = _normalize(fileName)
-        
-        // Aplicar lógica conforme o modo selecionado
-        switch (matchMode) {
-          case 'igual':
-            return normValue === normFile
-          
-          case 'comeca_com':
-            return normFile.startsWith(normValue)
-          
-          case 'termina_com':
-            return normFile.endsWith(normValue)
-          
-          case 'contem':
-          default:
-            return normFile.includes(normValue)
-        }
-      }
-
       const filesReferencedSet = new Set<string>()
       const recipientAttachments: Map<number, string[]> = new Map()
       const attachmentRecipients: Map<string, Array<{index: number, contact: string}>> = new Map()
@@ -792,7 +829,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         }
         
         // Procura por arquivos que correspondem ao valor da coluna
-        const matchedFiles = attachments.filter(f => _matchesFile(fileNameValue, f.name))
+        const matchedFiles = attachments.filter(f => attachmentMatchesByMode(fileNameValue, f.name))
         
         recipientAttachments.set(index, matchedFiles.map(f => f.name))
         attachmentPreview.push({ index, contact, attachments: matchedFiles.map(f => f.name) })
@@ -801,7 +838,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
           missingFilesForRecipients.push({ index, fileName: fileNameValue })
         } else {
           matchedFiles.forEach(f => {
-            filesReferencedSet.add(_normalize(f.name))
+            filesReferencedSet.add(normalizeAttachmentReference(f.name))
             if (!attachmentRecipients.has(f.name)) {
               attachmentRecipients.set(f.name, [])
             }
@@ -812,7 +849,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       
       unusedFiles = attachments
         .map(f => f.name)
-        .filter(name => !filesReferencedSet.has(_normalize(name)))
+        .filter(name => !filesReferencedSet.has(normalizeAttachmentReference(name)))
       
       recipientsWithMultipleAttachments = Array.from(recipientAttachments.entries())
         .filter(([_, atts]) => atts.length > 1)
@@ -854,30 +891,34 @@ export default function SendPage({ onNavigate }: SendPageProps) {
 
   async function sendMessages() {
     const contactColumn = channel === 'whatsapp' ? phoneColumn : emailColumn
-    
-    const payload: any = {
-      channel,
-      rows: rowsToSend.length > 0 ? rowsToSend : rows,
-      contact_column: contactColumn,
-      file_column: fileColumn || null,
-      attach_to_all: !fileColumn,
-      match_mode: matchMode
-    }
+    const rowsForDispatch = rowsToSend.length > 0 ? rowsToSend : rows
+    const form = new FormData()
 
     if (channel === 'email') {
-      payload.message = message
-      payload.subject = subject
-      payload.email_sender = selectedEmailSender
-      payload.app_password = selectedEmailSenderRecord?.appPassword || ''
-      payload.email_template_title = selectedEmailTemplateTitle || null
+      const payload: any = {
+        channel,
+        rows: rowsForDispatch,
+        contact_column: contactColumn,
+        file_column: fileColumn || null,
+        attach_to_all: !fileColumn,
+        match_mode: matchMode,
+        message,
+        subject,
+        email_sender: selectedEmailSender,
+        app_password: selectedEmailSenderRecord?.appPassword || '',
+        email_template_title: selectedEmailTemplateTitle || null
+      }
+
+      if (attachments.length > 0) {
+        payload.attachment_names = attachments.map(f => f.name)
+      }
+
+      form.append('payload', JSON.stringify(payload))
+      attachments.forEach(f => form.append('files', f, f.name))
     }
 
     if (channel === 'whatsapp') {
-      payload.whatsapp_sender_id = effectiveWhatsappSender?.id || null
-      payload.whatsapp_template_title = selectedWhatsappTemplateTitle
-      payload.whatsapp_template_language_code = 'pt_BR'
-      payload.whatsapp_template_parameter_format = 'NAMED'
-      payload.whatsapp_template_variables = whatsappTemplateVariables.map(variable => {
+      const templateParams = whatsappTemplateVariables.map(variable => {
         const binding = whatsappVariableBindings[variable] || { mode: 'fixed', column: '', value: '' }
         if (binding.mode === 'column') {
           return {
@@ -893,15 +934,48 @@ export default function SendPage({ onNavigate }: SendPageProps) {
           value: binding.value
         }
       })
-    }
 
-    if (attachments.length > 0) {
-      payload.attachment_names = attachments.map(f => f.name)
-    }
+      const fileFieldByName = new Map<string, string>()
+      attachments.forEach((file, index) => {
+        const fileField = `file_${index + 1}`
+        fileFieldByName.set(file.name, fileField)
+        form.append(fileField, file, file.name)
+      })
 
-    const form = new FormData()
-    form.append('payload', JSON.stringify(payload))
-    attachments.forEach(f => form.append('files', f, f.name))
+      const attachmentsMap = attachments.map(file => {
+        const binding = whatsappAttachmentBindings[file.name] || { buttonPayload: '', caption: '' }
+        return {
+          button_payload: binding.buttonPayload,
+          file_field: fileFieldByName.get(file.name) || '',
+          caption: binding.caption.trim()
+        }
+      })
+
+      form.append('sender_id', effectiveWhatsappSender?.id || '')
+      form.append('template_name', selectedWhatsappTemplateTitle)
+      form.append('language_code', whatsappTemplatePreview?.language || 'pt_BR')
+      form.append('template_params', JSON.stringify(templateParams))
+      form.append('attachments_map', JSON.stringify(attachmentsMap))
+      form.append('idempotency_key', createIdempotencyKey())
+
+      // Campos auxiliares para envio em massa com mapeamento por coluna no backend.
+      form.append('channel', channel)
+      form.append('rows', JSON.stringify(rowsForDispatch))
+      form.append('contact_column', contactColumn)
+      form.append('wa_id_column', contactColumn)
+      form.append('file_column', fileColumn || '')
+      form.append('attach_to_all', String(!fileColumn))
+      form.append('match_mode', matchMode)
+
+      if (attachments.length > 0) {
+        form.append('attachment_names', JSON.stringify(attachments.map(f => f.name)))
+      }
+
+      const firstWaId = rowsForDispatch.find(row => (row[contactColumn] || '').trim())?.[contactColumn] || ''
+      if (firstWaId) {
+        form.append('wa_id', firstWaId)
+      }
+    }
 
     try {
       const resp = await fetch(`${config.API_BASE}/jobs/start/`, { 
@@ -1017,12 +1091,31 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         headers={headers}
         fileColumn={fileColumn}
         matchMode={matchMode}
+        channel={channel}
+        whatsappButtons={whatsappTemplateButtons}
+        whatsappAttachmentBindings={whatsappAttachmentBindings}
         theme={currentTheme}
         onAddFiles={handleAttachmentFiles}
-        onRemoveFile={idx => setAttachments(prev => prev.filter((_, i) => i !== idx))}
-        onClearAll={() => setAttachments([])}
+        onRemoveFile={idx => setAttachments(prev => {
+          const next = prev.filter((_, i) => i !== idx)
+          setWhatsappAttachmentBindings(current => {
+            const byName = new Set(next.map(file => file.name))
+            return Object.fromEntries(Object.entries(current).filter(([fileName]) => byName.has(fileName)))
+          })
+          return next
+        })}
+        onClearAll={() => {
+          setAttachments([])
+          setWhatsappAttachmentBindings({})
+        }}
         onFileColumnChange={setFileColumn}
         onMatchModeChange={setMatchMode}
+        onWhatsappAttachmentBindingChange={(fileName, binding) => {
+          setWhatsappAttachmentBindings(prev => ({
+            ...prev,
+            [fileName]: binding
+          }))
+        }}
       />
 
       <div className={`mb-4 p-4 rounded ${currentTheme.bg} border ${currentTheme.border} space-y-3`}>

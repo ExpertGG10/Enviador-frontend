@@ -87,8 +87,8 @@ export function WhatsAppTemplatePreviewSection({
             {preview.buttons?.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {preview.buttons.map((button, index) => (
-                  <span key={`${button}-${index}`} className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-700">
-                    {button}
+                  <span key={`${button.payload}-${index}`} className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-700">
+                    {button.label}
                   </span>
                 ))}
               </div>
