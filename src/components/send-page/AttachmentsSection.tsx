@@ -1,24 +1,11 @@
 import React, { useRef } from 'react'
 import { formatBytes } from '../../utils/fileUtils'
 
-export type WhatsAppButtonFileEntry = {
-  fileName: string
-  caption: string
-  /** coluna da planilha usada para diferenciar qual destinatário recebe este arquivo */
-  fileColumn: string
-}
-
-/** keyed by button.payload → lista de entradas arquivo/coluna */
-export type WhatsAppButtonFileBindings = Record<string, WhatsAppButtonFileEntry[]>
-
 interface Props {
   attachments: File[]
   headers: string[]
   fileColumn: string
   matchMode: 'igual' | 'contem' | 'comeca_com' | 'termina_com'
-  channel?: 'whatsapp' | 'email' | 'none'
-  whatsappButtons?: Array<{ label: string; payload: string }>
-  whatsappButtonFileBindings?: WhatsAppButtonFileBindings
   theme: {
     bg: string
     border: string
@@ -30,26 +17,19 @@ interface Props {
   onClearAll: () => void
   onFileColumnChange: (column: string) => void
   onMatchModeChange: (mode: 'igual' | 'contem' | 'comeca_com' | 'termina_com') => void
-  onWhatsappButtonFileBindingsChange?: (buttonPayload: string, entries: WhatsAppButtonFileEntry[]) => void
 }
-
-const EMPTY_ENTRY: WhatsAppButtonFileEntry = { fileName: '', caption: '', fileColumn: '' }
 
 export function AttachmentsSection({
   attachments,
   headers,
   fileColumn,
   matchMode,
-  channel = 'none',
-  whatsappButtons = [],
-  whatsappButtonFileBindings = {},
   theme,
   onAddFiles,
   onRemoveFile,
   onClearAll,
   onFileColumnChange,
-  onMatchModeChange,
-  onWhatsappButtonFileBindingsChange
+  onMatchModeChange
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -112,117 +92,19 @@ export function AttachmentsSection({
             </ul>
           </div>
 
-          {channel !== 'whatsapp' && (
-            <div className="mt-4 rounded">
-              <div className="text-sm font-medium mb-2">Vincular arquivos à coluna:</div>
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <select value={fileColumn} onChange={e => onFileColumnChange(e.target.value)} className="input w-full">
-                    <option value="">Nenhuma coluna (enviar os mesmos para todos)</option>
-                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                  </select>
-                </div>
+          <div className="mt-4 rounded">
+            <div className="text-sm font-medium mb-2">Vincular arquivos à coluna:</div>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <select value={fileColumn} onChange={e => onFileColumnChange(e.target.value)} className="input w-full">
+                  <option value="">Nenhuma coluna (enviar os mesmos para todos)</option>
+                  {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
               </div>
             </div>
-          )}
+          </div>
 
-          {channel === 'whatsapp' && (
-            <div className="mt-4 space-y-3">
-              {whatsappButtons.length === 0 ? (
-                <p className="text-xs text-amber-600 rounded border border-amber-200 bg-amber-50 p-2">
-                  Selecione uma template com botões para configurar os vínculos de anexo.
-                </p>
-              ) : (
-                whatsappButtons.map((button) => {
-                  const entries: WhatsAppButtonFileEntry[] = whatsappButtonFileBindings[button.payload] || []
-
-                  const updateEntry = (idx: number, partial: Partial<WhatsAppButtonFileEntry>) => {
-                    const next = entries.map((e, i) => i === idx ? { ...e, ...partial } : e)
-                    onWhatsappButtonFileBindingsChange?.(button.payload, next)
-                  }
-
-                  const addEntry = () => {
-                    onWhatsappButtonFileBindingsChange?.(button.payload, [...entries, { ...EMPTY_ENTRY }])
-                  }
-
-                  const removeEntry = (idx: number) => {
-                    onWhatsappButtonFileBindingsChange?.(button.payload, entries.filter((_, i) => i !== idx))
-                  }
-
-                  return (
-                    <div key={button.payload} className="rounded border border-green-200 bg-white p-3 space-y-2">
-                      {/* Cabeçalho do botão */}
-                      <div className="flex items-center justify-between">
-                        <span className="rounded bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">
-                          Botão: {button.label}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={addEntry}
-                          className="btn btn-ghost text-xs text-green-700"
-                        >+ Adicionar arquivo</button>
-                      </div>
-
-                      {entries.length === 0 && (
-                        <p className="text-xs text-slate-400 italic">
-                          Nenhum arquivo vinculado — clique em "Adicionar arquivo" para configurar.
-                        </p>
-                      )}
-
-                      {entries.map((entry, idx) => (
-                        <div key={idx} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center border-t border-green-100 pt-2">
-                          {/* Arquivo */}
-                          <select
-                            value={entry.fileName}
-                            onChange={e => updateEntry(idx, { fileName: e.target.value })}
-                            className="input"
-                          >
-                            <option value="">Selecione o arquivo</option>
-                            {attachments.map(f => (
-                              <option key={f.name} value={f.name}>{f.name}</option>
-                            ))}
-                          </select>
-
-                          {/* Coluna da planilha */}
-                          <select
-                            value={entry.fileColumn}
-                            onChange={e => updateEntry(idx, { fileColumn: e.target.value })}
-                            className="input"
-                            title="Coluna da planilha para diferenciar por destinatário (opcional)"
-                          >
-                            <option value="">Todos os destinatários</option>
-                            {headers.map(h => (
-                              <option key={h} value={h}>{h}</option>
-                            ))}
-                          </select>
-
-                          {/* Legenda */}
-                          <input
-                            type="text"
-                            value={entry.caption}
-                            disabled={!entry.fileName}
-                            onChange={e => updateEntry(idx, { caption: e.target.value })}
-                            placeholder="Legenda (opcional)"
-                            className="input disabled:opacity-40"
-                          />
-
-                          {/* Remover */}
-                          <button
-                            type="button"
-                            onClick={() => removeEntry(idx)}
-                            className="text-xs text-red-600 hover:underline text-left md:text-center"
-                          >Remover</button>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          )}
-
-          {channel !== 'whatsapp' && (
-            <div className='mt-4'>
+          <div className='mt-4'>
               <div className="text-sm font-medium mb-2">Opções de vinculação:</div>
 
               <div className='flex items-end justify-between'>
@@ -278,8 +160,7 @@ export function AttachmentsSection({
                   <label htmlFor="termina_com" className="select-none ms-2 text-xs font-medium text-heading">Termina com a coluna selecionada</label>
                 </div>
               </div>
-            </div>
-          )}
+          </div>
         </>
       )}
 
