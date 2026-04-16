@@ -1,26 +1,45 @@
-import React, { useMemo, useRef } from 'react'
-import { formatBytes } from '../../utils/fileUtils'
+import React from 'react'
 
 export type WhatsAppButtonFunction = 'none' | 'attachment'
 
-export type WhatsAppButtonAttachmentEntry = {
-  fileName: string
-  caption: string
+export type WhatsAppButtonAttachmentBinding = {
   fileColumn: string
+  captionColumn: string
+  required: boolean
+  mediaType: 'document' | 'image' | 'video'
+  mimeType: string
 }
 
 export type WhatsAppButtonAction = {
   functionType: WhatsAppButtonFunction
-  attachments: WhatsAppButtonAttachmentEntry[]
+  binding: WhatsAppButtonAttachmentBinding
 }
 
 export type WhatsAppButtonActionsMap = Record<string, WhatsAppButtonAction>
 
+export const DEFAULT_BINDING: WhatsAppButtonAttachmentBinding = {
+  fileColumn: '',
+  captionColumn: '',
+  required: true,
+  mediaType: 'document',
+  mimeType: 'application/pdf'
+}
+
+const MEDIA_TYPE_OPTIONS: Array<{ value: WhatsAppButtonAttachmentBinding['mediaType']; label: string }> = [
+  { value: 'document', label: 'Documento' },
+  { value: 'image', label: 'Imagem' },
+  { value: 'video', label: 'Vídeo' }
+]
+
+const MIME_TYPE_SUGGESTIONS: Record<WhatsAppButtonAttachmentBinding['mediaType'], string[]> = {
+  document: ['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword'],
+  image: ['image/jpeg', 'image/png', 'image/webp'],
+  video: ['video/mp4', 'video/3gpp']
+}
+
 type Props = {
   buttons: Array<{ label: string; payload: string }>
   headers: string[]
-  matchMode: 'igual' | 'contem' | 'comeca_com' | 'termina_com'
-  attachments: File[]
   actionsMap: WhatsAppButtonActionsMap
   theme: {
     bg: string
@@ -28,78 +47,23 @@ type Props = {
     accent: string
     btnClass: string
   }
-  onMatchModeChange: (mode: 'igual' | 'contem' | 'comeca_com' | 'termina_com') => void
-  onAddFiles: (files: FileList | null) => void
-  onRemoveFile: (index: number) => void
-  onClearAll: () => void
   onButtonFunctionChange: (buttonPayload: string, functionType: WhatsAppButtonFunction) => void
-  onButtonAttachmentsChange: (buttonPayload: string, entries: WhatsAppButtonAttachmentEntry[]) => void
-}
-
-const EMPTY_ENTRY: WhatsAppButtonAttachmentEntry = {
-  fileName: '',
-  caption: '',
-  fileColumn: ''
+  onButtonBindingChange: (buttonPayload: string, binding: WhatsAppButtonAttachmentBinding) => void
 }
 
 export function WhatsAppAttachmentsSection({
   buttons,
   headers,
-  matchMode,
-  attachments,
   actionsMap,
   theme,
-  onMatchModeChange,
-  onAddFiles,
-  onRemoveFile,
-  onClearAll,
   onButtonFunctionChange,
-  onButtonAttachmentsChange
+  onButtonBindingChange
 }: Props) {
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
-
-  const radioStyle = 'w-4 h-4 border-2 rounded-full focus:ring-2 focus:outline-none appearance-none cursor-pointer'
-  const checkedColor = theme.accent.includes('green') ? '#16a34a' : '#4f46e5'
-
-  const buttonsWithAttachmentFn = useMemo(
-    () => buttons.filter(button => (actionsMap[button.payload]?.functionType || 'none') === 'attachment'),
-    [buttons, actionsMap]
-  )
-
-  const handleAddFilesForButton = (buttonPayload: string, files: FileList | null) => {
-    if (!files || files.length === 0) return
-    onAddFiles(files)
-
-    const currentEntries = actionsMap[buttonPayload]?.attachments || []
-    const newEntries = Array.from(files).map(file => ({
-      ...EMPTY_ENTRY,
-      fileName: file.name
-    }))
-    onButtonAttachmentsChange(buttonPayload, [...currentEntries, ...newEntries])
-  }
-
-  const removeAttachmentEntry = (buttonPayload: string, entryIndex: number) => {
-    const currentEntries = actionsMap[buttonPayload]?.attachments || []
-    onButtonAttachmentsChange(buttonPayload, currentEntries.filter((_, idx) => idx !== entryIndex))
-  }
-
-  const updateAttachmentEntry = (
-    buttonPayload: string,
-    entryIndex: number,
-    partial: Partial<WhatsAppButtonAttachmentEntry>
-  ) => {
-    const currentEntries = actionsMap[buttonPayload]?.attachments || []
-    const nextEntries = currentEntries.map((entry, idx) =>
-      idx === entryIndex ? { ...entry, ...partial } : entry
-    )
-    onButtonAttachmentsChange(buttonPayload, nextEntries)
-  }
-
   return (
     <div className={`mb-4 p-4 rounded ${theme.bg} border-2 ${theme.border}`}>
       <h3 className="font-medium mb-2">Função dos botões (WhatsApp)</h3>
       <p className="text-xs text-slate-500 mb-3">
-        Defina a função de cada botão da template. Quando a função for "Anexo", a configuração de anexos aparece abaixo do botão.
+        Defina a função de cada botão da template. Quando a função for "Anexo", configure as colunas da planilha que contêm o nome do arquivo e a legenda.
       </p>
 
       {buttons.length === 0 ? (
@@ -110,7 +74,11 @@ export function WhatsAppAttachmentsSection({
         <div className="space-y-3">
           {buttons.map(button => {
             const functionType = actionsMap[button.payload]?.functionType || 'none'
-            const entries = actionsMap[button.payload]?.attachments || []
+            const binding = actionsMap[button.payload]?.binding || DEFAULT_BINDING
+
+            const updateBinding = (partial: Partial<WhatsAppButtonAttachmentBinding>) => {
+              onButtonBindingChange(button.payload, { ...binding, ...partial })
+            }
 
             return (
               <div key={button.payload} className="rounded border border-green-200 bg-white p-3">
@@ -128,119 +96,90 @@ export function WhatsAppAttachmentsSection({
 
                 {functionType === 'attachment' && (
                   <div className="mt-3 rounded border border-green-100 bg-green-50/30 p-3 space-y-3">
-                    <input
-                      ref={el => { inputRefs.current[button.payload] = el }}
-                      type="file"
-                      multiple
-                      className="hidden"
-                      onChange={e => {
-                        handleAddFilesForButton(button.payload, e.target.files)
-                        e.currentTarget.value = ''
-                      }}
-                    />
+                    <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Configuração do Anexo</div>
 
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <div className="text-sm font-medium">Anexos deste botão</div>
-                        <div className="text-xs text-slate-500">Os arquivos adicionados aqui ficam vinculados a este botão.</div>
+                        <label className="block text-xs text-slate-500 mb-1">Coluna com nome do arquivo <span className="text-red-500">*</span></label>
+                        <select
+                          value={binding.fileColumn}
+                          onChange={e => updateBinding({ fileColumn: e.target.value })}
+                          className="input"
+                        >
+                          <option value="">Selecione a coluna…</option>
+                          {headers.map(header => (
+                            <option key={header} value={header}>{header}</option>
+                          ))}
+                        </select>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => inputRefs.current[button.payload]?.click()}
-                        className={`btn ${theme.btnClass}`}
-                      >Adicionar arquivo</button>
+
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Coluna com legenda (opcional)</label>
+                        <select
+                          value={binding.captionColumn}
+                          onChange={e => updateBinding({ captionColumn: e.target.value })}
+                          className="input"
+                        >
+                          <option value="">Nenhuma</option>
+                          {headers.map(header => (
+                            <option key={header} value={header}>{header}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Tipo de mídia</label>
+                        <select
+                          value={binding.mediaType}
+                          onChange={e => {
+                            const mediaType = e.target.value as WhatsAppButtonAttachmentBinding['mediaType']
+                            updateBinding({ mediaType, mimeType: MIME_TYPE_SUGGESTIONS[mediaType][0] })
+                          }}
+                          className="input"
+                        >
+                          {MEDIA_TYPE_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">MIME type</label>
+                        <input
+                          type="text"
+                          value={binding.mimeType}
+                          onChange={e => updateBinding({ mimeType: e.target.value })}
+                          placeholder="ex: application/pdf"
+                          className="input"
+                          list={`mime-suggestions-${button.payload}`}
+                        />
+                        <datalist id={`mime-suggestions-${button.payload}`}>
+                          {MIME_TYPE_SUGGESTIONS[binding.mediaType].map(mime => (
+                            <option key={mime} value={mime} />
+                          ))}
+                        </datalist>
+                      </div>
                     </div>
 
-                    {entries.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic">Nenhum anexo configurado para este botão.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {entries.map((entry, idx) => {
-                          const selectedFile = attachments.find(file => file.name === entry.fileName)
-                          return (
-                            <div key={idx} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center border-t border-green-100 pt-2">
-                              <div className="text-xs text-slate-700 break-all">
-                                {entry.fileName || 'Arquivo não selecionado'}
-                                {selectedFile && ` (${formatBytes(selectedFile.size)})`}
-                              </div>
-
-                              <select
-                                value={entry.fileColumn}
-                                onChange={e => updateAttachmentEntry(button.payload, idx, { fileColumn: e.target.value })}
-                                className="input"
-                              >
-                                <option value="">Todos os destinatários</option>
-                                {headers.map(header => (
-                                  <option key={header} value={header}>{header}</option>
-                                ))}
-                              </select>
-
-                              <input
-                                type="text"
-                                value={entry.caption}
-                                onChange={e => updateAttachmentEntry(button.payload, idx, { caption: e.target.value })}
-                                placeholder="Legenda (opcional)"
-                                className="input"
-                              />
-
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => removeAttachmentEntry(button.payload, idx)}
-                                  className="text-xs text-red-600 hover:underline"
-                                >Remover vínculo</button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const fileIndex = attachments.findIndex(file => file.name === entry.fileName)
-                                    if (fileIndex >= 0) onRemoveFile(fileIndex)
-                                  }}
-                                  className="text-xs text-red-500 hover:underline"
-                                >Remover arquivo</button>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <input
+                        id={`required-${button.payload}`}
+                        type="checkbox"
+                        checked={binding.required}
+                        onChange={e => updateBinding({ required: e.target.checked })}
+                        className="w-4 h-4"
+                      />
+                      <label htmlFor={`required-${button.payload}`} className="text-xs text-slate-600 select-none">
+                        Envio obrigatório (erro se a coluna estiver vazia para o destinatário)
+                      </label>
+                    </div>
                   </div>
                 )}
               </div>
             )
           })}
-
-          {buttonsWithAttachmentFn.length > 0 && (
-            <div className="rounded border border-green-200 bg-white p-3">
-              <div className="text-sm font-medium mb-2">Modo de correspondência por coluna</div>
-              <div className='flex items-end justify-between'>
-                <div className='flex items-center'>
-                  <input id="wa_igual" type="radio" name="wa-match-mode" value="igual" checked={matchMode === 'igual'} onChange={e => onMatchModeChange(e.target.value as any)} className={`border-2 ${theme.border} ${radioStyle}`} />
-                  <label htmlFor="wa_igual" className="select-none ms-2 text-xs font-medium text-heading">Igual</label>
-                </div>
-                <div className='flex items-center'>
-                  <input id="wa_contem" type="radio" name="wa-match-mode" value="contem" checked={matchMode === 'contem'} onChange={e => onMatchModeChange(e.target.value as any)} className={`border-2 ${theme.border} ${radioStyle}`} />
-                  <label htmlFor="wa_contem" className="select-none ms-2 text-xs font-medium text-heading">Contém</label>
-                </div>
-                <div className='flex items-center'>
-                  <input id="wa_comeca_com" type="radio" name="wa-match-mode" value="comeca_com" checked={matchMode === 'comeca_com'} onChange={e => onMatchModeChange(e.target.value as any)} className={`border-2 ${theme.border} ${radioStyle}`} />
-                  <label htmlFor="wa_comeca_com" className="select-none ms-2 text-xs font-medium text-heading">Começa com</label>
-                </div>
-                <div className='flex items-center'>
-                  <input id="wa_termina_com" type="radio" name="wa-match-mode" value="termina_com" checked={matchMode === 'termina_com'} onChange={e => onMatchModeChange(e.target.value as any)} className={`border-2 ${theme.border} ${radioStyle}`} />
-                  <label htmlFor="wa_termina_com" className="select-none ms-2 text-xs font-medium text-heading">Termina com</label>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
-
-      <style>{`
-        input[type='radio'][class*='w-4']:checked {
-          background-color: ${checkedColor};
-          border-color: ${checkedColor};
-        }
-      `}</style>
     </div>
   )
 }

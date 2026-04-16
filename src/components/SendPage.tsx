@@ -9,7 +9,9 @@ import { DataTableSection } from './send-page/DataTableSection'
 import { AttachmentsSection } from './send-page/AttachmentsSection'
 import {
   WhatsAppAttachmentsSection,
-  type WhatsAppButtonActionsMap
+  type WhatsAppButtonActionsMap,
+  type WhatsAppButtonAttachmentBinding,
+  DEFAULT_BINDING
 } from './send-page/WhatsAppAttachmentsSection'
 import { MessageSection } from './send-page/MessageSection'
 import { ContactChannelSection } from './send-page/ContactChannelSection'
@@ -400,7 +402,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         const existing = prev[button.payload]
         next[button.payload] = existing || {
           functionType: 'none',
-          attachments: []
+          binding: { ...DEFAULT_BINDING }
         }
       })
 
@@ -576,11 +578,14 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     setWhatsappButtonActions(prev => {
       const next: WhatsAppButtonActionsMap = {}
       Object.entries(prev).forEach(([buttonPayload, action]) => {
+        const binding = action.binding
         next[buttonPayload] = {
           ...action,
-          attachments: action.attachments.map(entry =>
-            entry.fileColumn === columnName ? { ...entry, fileColumn: '' } : entry
-          )
+          binding: {
+            ...binding,
+            fileColumn: binding.fileColumn === columnName ? '' : binding.fileColumn,
+            captionColumn: binding.captionColumn === columnName ? '' : binding.captionColumn
+          }
         }
       })
       return next
@@ -621,11 +626,14 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     setWhatsappButtonActions(prev => {
       const next: WhatsAppButtonActionsMap = {}
       Object.entries(prev).forEach(([buttonPayload, action]) => {
+        const binding = action.binding
         next[buttonPayload] = {
           ...action,
-          attachments: action.attachments.map(entry =>
-            entry.fileColumn === oldName ? { ...entry, fileColumn: newName } : entry
-          )
+          binding: {
+            ...binding,
+            fileColumn: binding.fileColumn === oldName ? newName : binding.fileColumn,
+            captionColumn: binding.captionColumn === oldName ? newName : binding.captionColumn
+          }
         }
       })
       return next
@@ -765,31 +773,14 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         button => (whatsappButtonActions[button.payload]?.functionType || 'none') === 'attachment'
       )
 
-      if (attachmentButtons.length > 0) {
-        const attachmentNames = new Set(attachments.map(f => f.name))
-        const hasAnyValidEntry = attachmentButtons.some(button =>
-          (whatsappButtonActions[button.payload]?.attachments || []).some(e => e.fileName && attachmentNames.has(e.fileName))
-        )
-        if (!hasAnyValidEntry) {
+      for (const button of attachmentButtons) {
+        const binding = whatsappButtonActions[button.payload]?.binding
+        if (!binding?.fileColumn) {
           setErrorModal({
-            title: 'Nenhum vínculo configurado',
-            message: 'Você marcou botão com função Anexo, mas não adicionou arquivos válidos em nenhum botão.'
+            title: 'Coluna de arquivo não configurada',
+            message: `Configure a coluna com o nome do arquivo no botão "${button.label}".`
           })
           return
-        }
-
-        // Verifica se alguma entrada aponta para arquivo não carregado
-        for (const button of attachmentButtons) {
-          const entries = whatsappButtonActions[button.payload]?.attachments || []
-          for (const entry of entries) {
-            if (entry.fileName && !attachmentNames.has(entry.fileName)) {
-              setErrorModal({
-                title: 'Arquivo não encontrado',
-                message: `Botão "${button.label}": o arquivo "${entry.fileName}" não foi carregado.`
-              })
-              return
-            }
-          }
         }
       }
 
@@ -947,6 +938,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     const contactColumn = channel === 'whatsapp' ? phoneColumn : emailColumn
     const rowsForDispatch = rowsOverride || (rowsToSend.length > 0 ? rowsToSend : rows)
     const form = new FormData()
+    let whatsappPayload: Record<string, unknown> | null = null
 
     if (channel === 'email') {
       const payload: any = {
@@ -990,82 +982,54 @@ export default function SendPage({ onNavigate }: SendPageProps) {
       })
 
       // Coletar arquivos únicos referenciados em entradas de botões e atribuir file_N
-      const fileFieldByName = new Map<string, string>()
-      let fileIndex = 0
       const attachmentButtons = whatsappTemplateButtons.filter(
         button => (whatsappButtonActions[button.payload]?.functionType || 'none') === 'attachment'
       )
 
-      for (const button of attachmentButtons) {
-        const entries = whatsappButtonActions[button.payload]?.attachments || []
-        for (const entry of entries) {
-          if (!entry.fileName || fileFieldByName.has(entry.fileName)) continue
-          fileIndex++
-          const fileField = `file_${fileIndex}`
-          fileFieldByName.set(entry.fileName, fileField)
-          const file = attachments.find(f => f.name === entry.fileName)
-          if (file) form.append(fileField, file, file.name)
+      const buttonAttachmentBindings = attachmentButtons.map(button => {
+        const binding = whatsappButtonActions[button.payload]!.binding
+        const entry: Record<string, unknown> = {
+          button_payload: button.payload,
+          file_column: binding.fileColumn,
+          required: binding.required,
+          media_type: binding.mediaType,
+          mime_type: binding.mimeType
         }
-      }
-
-      // Montar attachments_map: uma entrada por (botão + arquivo), ignorando entradas sem arquivo
-      const attachmentsMap: Array<{
-        button_payload: string
-        file_field: string
-        caption: string
-        file_column?: string
-        match_mode?: string
-      }> = []
-      for (const button of attachmentButtons) {
-        const entries = whatsappButtonActions[button.payload]?.attachments || []
-        for (const entry of entries) {
-          if (!entry.fileName) continue
-          const mapEntry: typeof attachmentsMap[0] = {
-            button_payload: button.payload,
-            file_field: fileFieldByName.get(entry.fileName) || '',
-            caption: entry.caption.trim()
-          }
-          if (entry.fileColumn) {
-            mapEntry.file_column = entry.fileColumn
-            mapEntry.match_mode = matchMode
-          }
-          attachmentsMap.push(mapEntry)
+        if (binding.captionColumn) {
+          entry.caption_column = binding.captionColumn
         }
+        return entry
+      })
+
+      const whatsappPayloadObj: Record<string, unknown> = {
+        channel,
+        mode: attachmentButtons.length > 0 ? 'template_with_pending_attachments' : 'template',
+        whatsapp_sender_id: effectiveWhatsappSender?.id || '',
+        whatsapp_template_title: selectedWhatsappTemplateTitle,
+        whatsapp_template_language_code: whatsappTemplatePreview?.language || 'pt_BR',
+        contact_column: contactColumn,
+        rows: rowsForDispatch,
+        whatsapp_template_variables: templateParams,
+        idempotency_key: createIdempotencyKey()
       }
 
-      form.append('sender_id', effectiveWhatsappSender?.id || '')
-      form.append('template_name', selectedWhatsappTemplateTitle)
-      form.append('language_code', whatsappTemplatePreview?.language || 'pt_BR')
-      form.append('template_params', JSON.stringify(templateParams))
-      form.append('attachments_map', JSON.stringify(attachmentsMap))
-      form.append('idempotency_key', createIdempotencyKey())
-
-      // Campos auxiliares para envio em massa com mapeamento por coluna no backend.
-      form.append('channel', channel)
-      form.append('rows', JSON.stringify(rowsForDispatch))
-      form.append('contact_column', contactColumn)
-      form.append('wa_id_column', contactColumn)
-      form.append('file_column', fileColumn || '')
-      form.append('attach_to_all', String(!fileColumn))
-      form.append('match_mode', matchMode)
-
-      if (attachments.length > 0) {
-        form.append('attachment_names', JSON.stringify(attachments.map(f => f.name)))
+      if (buttonAttachmentBindings.length > 0) {
+        whatsappPayloadObj.whatsapp_button_attachment_bindings = buttonAttachmentBindings
       }
 
-      const firstWaId = rowsForDispatch.find(row => (row[contactColumn] || '').trim())?.[contactColumn] || ''
-      if (firstWaId) {
-        form.append('wa_id', firstWaId)
-      }
+      whatsappPayload = whatsappPayloadObj
     }
 
     try {
-      const resp = await fetch(`${config.API_BASE}/jobs/start/`, { 
-        method: 'POST', 
-        body: form,
-        headers: {
-          'Authorization': `Token ${token}`
-        }
+      const isWhatsappChannel = channel === 'whatsapp'
+      const resp = await fetch(`${config.API_BASE}/jobs/start/`, {
+        method: 'POST',
+        body: isWhatsappChannel
+          ? JSON.stringify(whatsappPayload)
+          : form,
+        headers: isWhatsappChannel
+          ? { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+          : { 'Authorization': `Token ${token}` }
       })
       
       if (!resp.ok) {
@@ -1316,31 +1280,23 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         <WhatsAppAttachmentsSection
           buttons={whatsappTemplateButtons}
           headers={headers}
-          matchMode={matchMode}
-          attachments={attachments}
           actionsMap={whatsappButtonActions}
           theme={currentTheme}
-          onMatchModeChange={setMatchMode}
-          onAddFiles={handleAttachmentFiles}
-          onRemoveFile={idx => setAttachments(prev => prev.filter((_, i) => i !== idx))}
-          onClearAll={() => setAttachments([])}
           onButtonFunctionChange={(buttonPayload, functionType) => {
             setWhatsappButtonActions(prev => ({
               ...prev,
               [buttonPayload]: {
                 functionType,
-                attachments: functionType === 'attachment'
-                  ? (prev[buttonPayload]?.attachments || [])
-                  : []
+                binding: prev[buttonPayload]?.binding || { ...DEFAULT_BINDING }
               }
             }))
           }}
-          onButtonAttachmentsChange={(buttonPayload, entries) => {
+          onButtonBindingChange={(buttonPayload, binding) => {
             setWhatsappButtonActions(prev => ({
               ...prev,
               [buttonPayload]: {
                 functionType: 'attachment',
-                attachments: entries
+                binding
               }
             }))
           }}
