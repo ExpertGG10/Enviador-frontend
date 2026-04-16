@@ -6,7 +6,7 @@ import ErrorModal from './ErrorModal'
 import { FileUploadSection } from './send-page/FileUploadSection'
 import { ManualCreateSection } from './send-page/ManualCreateSection'
 import { DataTableSection } from './send-page/DataTableSection'
-import { AttachmentsSection } from './send-page/AttachmentsSection'
+import { AttachmentsSection, type WhatsAppButtonFileBindings } from './send-page/AttachmentsSection'
 import { MessageSection } from './send-page/MessageSection'
 import { ContactChannelSection } from './send-page/ContactChannelSection'
 import { WhatsAppTemplatePreviewSection, VariableBinding } from './send-page/WhatsAppTemplatePreviewSection'
@@ -102,7 +102,8 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   
   // Attachments
   const [attachments, setAttachments] = useState<File[]>([])
-  const [whatsappAttachmentBindings, setWhatsappAttachmentBindings] = useState<Record<string, { buttonPayload: string; caption: string }>>({})
+  /** keyed by button.payload → lista de entradas arquivo+coluna */
+  const [whatsappButtonFileBindings, setWhatsappButtonFileBindings] = useState<WhatsAppButtonFileBindings>({})
   const [fileColumn, setFileColumn] = useState<string>(initialDraft?.fileColumn || '')
   const [matchMode, setMatchMode] = useState<'igual' | 'contem' | 'comeca_com' | 'termina_com'>(initialDraft?.matchMode || 'contem')
   
@@ -385,22 +386,17 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     })
   }, [channel, whatsappTemplateVariables])
 
+  // Ao mudar os botões da template, remove bindings cujo payload não existe mais
   useEffect(() => {
-    setWhatsappAttachmentBindings(prev => {
-      const next: Record<string, { buttonPayload: string; caption: string }> = {}
-      const availablePayloads = new Set(whatsappTemplateButtons.map(button => button.payload))
-
-      attachments.forEach(file => {
-        const existing = prev[file.name] || { buttonPayload: '', caption: '' }
-        next[file.name] = {
-          buttonPayload: availablePayloads.has(existing.buttonPayload) ? existing.buttonPayload : '',
-          caption: existing.caption || ''
-        }
+    setWhatsappButtonFileBindings(prev => {
+      const validPayloads = new Set(whatsappTemplateButtons.map(button => button.payload))
+      const next: WhatsAppButtonFileBindings = {}
+      Object.entries(prev).forEach(([payload, entries]) => {
+        if (validPayloads.has(payload)) next[payload] = entries
       })
-
       return next
     })
-  }, [attachments, whatsappTemplateButtons])
+  }, [whatsappTemplateButtons])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -730,13 +726,31 @@ export default function SendPage({ onNavigate }: SendPageProps) {
           return
         }
 
-        const fileWithoutButton = attachments.find(file => !whatsappAttachmentBindings[file.name]?.buttonPayload)
-        if (fileWithoutButton) {
+        // Verifica se pelo menos uma entrada com arquivo válido foi configurada
+        const attachmentNames = new Set(attachments.map(f => f.name))
+        const hasAnyValidEntry = whatsappTemplateButtons.some(button =>
+          (whatsappButtonFileBindings[button.payload] || []).some(e => e.fileName && attachmentNames.has(e.fileName))
+        )
+        if (!hasAnyValidEntry) {
           setErrorModal({
-            title: 'Vínculo pendente',
-            message: `Vincule o anexo "${fileWithoutButton.name}" a um botão da template antes de enviar.`
+            title: 'Nenhum vínculo configurado',
+            message: 'Vincule ao menos um arquivo a um botão da template antes de enviar.'
           })
           return
+        }
+
+        // Verifica se alguma entrada aponta para arquivo não carregado
+        for (const button of whatsappTemplateButtons) {
+          const entries = whatsappButtonFileBindings[button.payload] || []
+          for (const entry of entries) {
+            if (entry.fileName && !attachmentNames.has(entry.fileName)) {
+              setErrorModal({
+                title: 'Arquivo não encontrado',
+                message: `Botão "${button.label}": o arquivo "${entry.fileName}" não foi carregado.`
+              })
+              return
+            }
+          }
         }
       }
     }
@@ -935,21 +949,45 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         }
       })
 
+      // Coletar arquivos únicos referenciados em entradas de botões e atribuir file_N
       const fileFieldByName = new Map<string, string>()
-      attachments.forEach((file, index) => {
-        const fileField = `file_${index + 1}`
-        fileFieldByName.set(file.name, fileField)
-        form.append(fileField, file, file.name)
-      })
-
-      const attachmentsMap = attachments.map(file => {
-        const binding = whatsappAttachmentBindings[file.name] || { buttonPayload: '', caption: '' }
-        return {
-          button_payload: binding.buttonPayload,
-          file_field: fileFieldByName.get(file.name) || '',
-          caption: binding.caption.trim()
+      let fileIndex = 0
+      for (const button of whatsappTemplateButtons) {
+        const entries = whatsappButtonFileBindings[button.payload] || []
+        for (const entry of entries) {
+          if (!entry.fileName || fileFieldByName.has(entry.fileName)) continue
+          fileIndex++
+          const fileField = `file_${fileIndex}`
+          fileFieldByName.set(entry.fileName, fileField)
+          const file = attachments.find(f => f.name === entry.fileName)
+          if (file) form.append(fileField, file, file.name)
         }
-      })
+      }
+
+      // Montar attachments_map: uma entrada por (botão + arquivo), ignorando entradas sem arquivo
+      const attachmentsMap: Array<{
+        button_payload: string
+        file_field: string
+        caption: string
+        file_column?: string
+        match_mode?: string
+      }> = []
+      for (const button of whatsappTemplateButtons) {
+        const entries = whatsappButtonFileBindings[button.payload] || []
+        for (const entry of entries) {
+          if (!entry.fileName) continue
+          const mapEntry: typeof attachmentsMap[0] = {
+            button_payload: button.payload,
+            file_field: fileFieldByName.get(entry.fileName) || '',
+            caption: entry.caption.trim()
+          }
+          if (entry.fileColumn) {
+            mapEntry.file_column = entry.fileColumn
+            mapEntry.match_mode = matchMode
+          }
+          attachmentsMap.push(mapEntry)
+        }
+      }
 
       form.append('sender_id', effectiveWhatsappSender?.id || '')
       form.append('template_name', selectedWhatsappTemplateTitle)
@@ -1093,27 +1131,17 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         matchMode={matchMode}
         channel={channel}
         whatsappButtons={whatsappTemplateButtons}
-        whatsappAttachmentBindings={whatsappAttachmentBindings}
+        whatsappButtonFileBindings={whatsappButtonFileBindings}
         theme={currentTheme}
         onAddFiles={handleAttachmentFiles}
-        onRemoveFile={idx => setAttachments(prev => {
-          const next = prev.filter((_, i) => i !== idx)
-          setWhatsappAttachmentBindings(current => {
-            const byName = new Set(next.map(file => file.name))
-            return Object.fromEntries(Object.entries(current).filter(([fileName]) => byName.has(fileName)))
-          })
-          return next
-        })}
-        onClearAll={() => {
-          setAttachments([])
-          setWhatsappAttachmentBindings({})
-        }}
+        onRemoveFile={idx => setAttachments(prev => prev.filter((_, i) => i !== idx))}
+        onClearAll={() => setAttachments([])}
         onFileColumnChange={setFileColumn}
         onMatchModeChange={setMatchMode}
-        onWhatsappAttachmentBindingChange={(fileName, binding) => {
-          setWhatsappAttachmentBindings(prev => ({
+        onWhatsappButtonFileBindingsChange={(buttonPayload, entries) => {
+          setWhatsappButtonFileBindings(prev => ({
             ...prev,
-            [fileName]: binding
+            [buttonPayload]: entries
           }))
         }}
       />
