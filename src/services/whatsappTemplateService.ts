@@ -30,11 +30,7 @@ type RawWhatsAppTemplatePreview = Omit<WhatsAppTemplatePreview, 'buttons'> & {
 }
 
 function normalizeButtonPayload(label: string, index: number): string {
-  const normalized = label
-    .trim()
-    .replace(/\s+/g, '_')
-    .replace(/[^A-Za-z0-9_]/g, '')
-    .toUpperCase()
+  const normalized = label.trim()
 
   return normalized || `BUTTON_${index + 1}`
 }
