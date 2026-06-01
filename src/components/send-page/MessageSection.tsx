@@ -1,5 +1,6 @@
 import React from 'react'
-import RichTextInput from '../RichTextInput'
+
+import RichTextInput from '@/components/RichTextInput'
 
 interface Props {
   headers: string[]

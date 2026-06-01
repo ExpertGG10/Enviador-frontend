@@ -1,4 +1,4 @@
-import { AccountSettings, DEFAULT_ACCOUNT_SETTINGS, GmailSenderCard, MessageTemplate, WhatsAppSenderCard } from '../types/accountSettings'
+import { AccountSettings, DEFAULT_ACCOUNT_SETTINGS, GmailSenderCard, MessageTemplate, WhatsAppSenderCard } from '@/types/accountSettings'
 
 const STORAGE_KEY = 'enviador_account_settings_v2'
 export const ACCOUNT_SETTINGS_UPDATED_EVENT = 'enviador:account-settings-updated'

@@ -1,5 +1,6 @@
 import React from 'react'
-import { JobState } from '../hooks/useJobPolling'
+
+import { JobState } from '@/hooks/useJobPolling'
 
 type Props = {
   job: JobState

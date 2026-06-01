@@ -1,7 +1,8 @@
 import React from 'react'
+import { type AppPage } from '@/types/navigation'
 
 type HomeProps = {
-  onNavigate?: (page: 'home' | 'send' | 'account' | 'contact') => void
+  onNavigate?: (page: AppPage) => void
 }
 
 export default function Home({ onNavigate }: HomeProps) {

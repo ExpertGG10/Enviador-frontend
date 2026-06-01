@@ -6,6 +6,10 @@
     "jsx": "react-jsx",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "allowJs": false,
     "strict": true,
     "esModuleInterop": true,

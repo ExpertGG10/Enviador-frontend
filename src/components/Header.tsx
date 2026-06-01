@@ -1,13 +1,15 @@
 import React from 'react'
-import logoUrl from '../assets/logo.svg'
 import { useState } from 'react'
-import { useAuth } from '../hooks/useAuth'
-import { accountSettingsService } from '../services/accountSettingsService'
-import { ACCOUNT_SETTINGS_UPDATED_EVENT, getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
+
+import logoUrl from '@/assets/logo.svg'
+import { useAuth } from '@/hooks/useAuth'
+import { accountSettingsService } from '@/services/accountSettingsService'
+import { type AppPage } from '@/types/navigation'
+import { ACCOUNT_SETTINGS_UPDATED_EVENT, getWhatsAppConfigStatus } from '@/utils/accountSettingsStorage'
 
 type HeaderProps = {
-  onNavigate?: (page: 'home' | 'send' | 'account' | 'contact' | 'whatsapp' | 'login' | 'signup') => void
-  currentPage?: 'home' | 'send' | 'account' | 'contact' | 'whatsapp' | 'login' | 'signup'
+  onNavigate?: (page: AppPage) => void
+  currentPage?: AppPage
 }
 
 type NavItem = {

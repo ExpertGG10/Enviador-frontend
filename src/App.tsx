@@ -1,20 +1,21 @@
 import React from 'react'
 import { useState } from 'react'
-import Header from './components/Header'
-import Home from './components/Home'
-import Footer from './components/Footer'
-import SendPage from './components/SendPage'
-import { LoginPage } from './components/LoginPage'
-import { SignupPage } from './components/SignupPage'
-import { ProtectedRoute } from './components/ProtectedRoute'
-import AccountPage from './components/AccountPage'
-import WhatsAppInboxPage from './components/WhatsAppInboxPage'
+import AccountPage from '@/components/AccountPage'
+import Footer from '@/components/Footer'
+import Header from '@/components/Header'
+import Home from '@/components/Home'
+import { LoginPage } from '@/components/LoginPage'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
+import SendPage from '@/components/SendPage'
+import { SignupPage } from '@/components/SignupPage'
+import WhatsAppInboxPage from '@/components/WhatsAppInboxPage'
+import { type AppPage } from '@/types/navigation'
 
 export default function App() {
-  const [page, setPage] = useState<'home' | 'send' | 'account' | 'contact' | 'whatsapp' | 'login' | 'signup'>('home')
+  const [page, setPage] = useState<AppPage>('home')
 
   // Pages that don't require authentication
-  const publicPages = ['home', 'login', 'signup']
+  const publicPages: AppPage[] = ['home', 'login', 'signup']
   const isPublicPage = publicPages.includes(page)
 
   return (

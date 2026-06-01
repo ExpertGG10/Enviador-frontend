@@ -1,5 +1,6 @@
 import React from 'react'
-import { WhatsAppTemplatePreview } from '../../services/whatsappTemplateService'
+
+import { WhatsAppTemplatePreview } from '@/services/whatsappTemplateService'
 
 export type VariableBinding = {
   mode: 'column' | 'fixed'

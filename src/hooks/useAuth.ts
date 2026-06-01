@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { authService, User } from '../services/authService';
+
+import { authService, User } from '@/services/authService';
 
 interface AuthContextType {
   token: string | null;

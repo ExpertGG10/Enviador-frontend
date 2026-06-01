@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { config } from '../config'
+
+import { config } from '@/config'
 
 type JobState = {
   job_id: string

@@ -1,6 +1,6 @@
-import { config } from '../config'
-import { AccountSettings } from '../types/accountSettings'
-import { loadAccountSettings, saveAccountSettings } from '../utils/accountSettingsStorage'
+import { config } from '@/config'
+import { AccountSettings } from '@/types/accountSettings'
+import { loadAccountSettings, saveAccountSettings } from '@/utils/accountSettingsStorage'
 
 const API_BASE = config.API_BASE
 

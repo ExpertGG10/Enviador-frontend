@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react'
-import { AccountSettings, GmailSenderCard, WhatsAppSenderCard } from '../types/accountSettings'
-import { getWhatsAppConfigStatus, saveAccountSettings } from '../utils/accountSettingsStorage'
-import { accountSettingsService } from '../services/accountSettingsService'
-import { useAuth } from '../hooks/useAuth'
-import RichTextInput from './RichTextInput'
+
+import { useAuth } from '@/hooks/useAuth'
+import { accountSettingsService } from '@/services/accountSettingsService'
+import { AccountSettings, GmailSenderCard, WhatsAppSenderCard } from '@/types/accountSettings'
+import { getWhatsAppConfigStatus, saveAccountSettings } from '@/utils/accountSettingsStorage'
+import RichTextInput from '@/components/RichTextInput'
 
 export default function AccountPage() {
   const { token } = useAuth()

@@ -1,5 +1,6 @@
 import React, { useRef } from 'react'
-import { formatBytes } from '../../utils/fileUtils'
+
+import { formatBytes } from '@/utils/fileUtils'
 
 interface Props {
   attachments: File[]

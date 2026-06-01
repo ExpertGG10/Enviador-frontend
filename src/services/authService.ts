@@ -1,4 +1,4 @@
-import { config } from '../config';
+import { config } from '@/config';
 
 // API base URL
 const API_BASE = config.API_BASE;

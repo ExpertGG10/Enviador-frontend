@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
+
+import { useAuth } from '@/hooks/useAuth';
+import { type AppPage } from '@/types/navigation';
 
 interface SignupPageProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 export function SignupPage({ onNavigate }: SignupPageProps) {

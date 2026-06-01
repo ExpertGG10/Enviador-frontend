@@ -1,5 +1,6 @@
 import React from 'react'
-import { Row } from '../../utils/fileUtils'
+
+import { Row } from '@/utils/fileUtils'
 
 interface Props {
   showManual: boolean

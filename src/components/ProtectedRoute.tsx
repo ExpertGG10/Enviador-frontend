@@ -1,9 +1,11 @@
 import { ReactNode } from 'react';
-import { useAuth } from '../hooks/useAuth';
+
+import { useAuth } from '@/hooks/useAuth';
+import { type AppPage } from '@/types/navigation';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 /**

@@ -1,16 +1,18 @@
 import React from 'react'
-import { useAuth } from '../hooks/useAuth'
-import { accountSettingsService } from '../services/accountSettingsService'
+
+import { useAuth } from '@/hooks/useAuth'
+import { accountSettingsService } from '@/services/accountSettingsService'
 import {
   whatsappInboxService,
   type WhatsAppInboxResponse,
   type WhatsAppMediaUrlResponse,
   type WhatsAppTimelineMessage
-} from '../services/whatsappInboxService'
-import { getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
+} from '@/services/whatsappInboxService'
+import { type AppPage } from '@/types/navigation'
+import { getWhatsAppConfigStatus } from '@/utils/accountSettingsStorage'
 
 type WhatsAppInboxPageProps = {
-  onNavigate?: (page: 'home' | 'send' | 'account' | 'contact' | 'whatsapp' | 'login' | 'signup') => void
+  onNavigate?: (page: AppPage) => void
 }
 
 export default function WhatsAppInboxPage({ onNavigate }: WhatsAppInboxPageProps) {

@@ -1,23 +1,25 @@
 import React, { useState, useEffect } from 'react'
-import { useAuth } from '../hooks/useAuth'
-import { config } from '../config'
-import SendProgressModal from './SendProgressModal'
-import ErrorModal from './ErrorModal'
-import { FileUploadSection } from './send-page/FileUploadSection'
-import { ManualCreateSection } from './send-page/ManualCreateSection'
-import { DataTableSection } from './send-page/DataTableSection'
-import { AttachmentsSection } from './send-page/AttachmentsSection'
+
+import { config } from '@/config'
+import { useAuth } from '@/hooks/useAuth'
+import { accountSettingsService } from '@/services/accountSettingsService'
+import { whatsappTemplateService, type WhatsAppTemplatePreview } from '@/services/whatsappTemplateService'
+import { AccountSettings } from '@/types/accountSettings'
+import { type AppPage } from '@/types/navigation'
+import { getWhatsAppConfigStatus } from '@/utils/accountSettingsStorage'
+import { parseFile, headersEqual, type Row } from '@/utils/fileUtils'
+import ErrorModal from '@/components/ErrorModal'
+import SendProgressModal from '@/components/SendProgressModal'
+import { FileUploadSection } from '@/components/send-page/FileUploadSection'
+import { ManualCreateSection } from '@/components/send-page/ManualCreateSection'
+import { DataTableSection } from '@/components/send-page/DataTableSection'
+import { AttachmentsSection } from '@/components/send-page/AttachmentsSection'
 // WhatsApp button functions are tracked inline
-import { MessageSection } from './send-page/MessageSection'
-import { ContactChannelSection } from './send-page/ContactChannelSection'
-import { WhatsAppTemplatePreviewSection, VariableBinding } from './send-page/WhatsAppTemplatePreviewSection'
-import { AttachmentWarningsModal } from './send-page/AttachmentWarningsModal'
-import { ColumnModals } from './send-page/ColumnModals'
-import { parseFile, headersEqual, type Row } from '../utils/fileUtils'
-import { getWhatsAppConfigStatus } from '../utils/accountSettingsStorage'
-import { accountSettingsService } from '../services/accountSettingsService'
-import { whatsappTemplateService, type WhatsAppTemplatePreview } from '../services/whatsappTemplateService'
-import { AccountSettings } from '../types/accountSettings'
+import { MessageSection } from '@/components/send-page/MessageSection'
+import { ContactChannelSection } from '@/components/send-page/ContactChannelSection'
+import { WhatsAppTemplatePreviewSection, VariableBinding } from '@/components/send-page/WhatsAppTemplatePreviewSection'
+import { AttachmentWarningsModal } from '@/components/send-page/AttachmentWarningsModal'
+import { ColumnModals } from '@/components/send-page/ColumnModals'
 
 type SendDraft = {
   channel: 'whatsapp' | 'email' | 'none'
@@ -49,7 +51,7 @@ function loadSendDraft(): SendDraft | null {
 }
 
 type SendPageProps = {
-  onNavigate?: (page: 'home' | 'send' | 'account' | 'contact' | 'login' | 'signup') => void
+  onNavigate?: (page: AppPage) => void
 }
 
 export default function SendPage({ onNavigate }: SendPageProps) {
