@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 
 import { useJobPolling } from '@/hooks/useJobPolling'
-import SendResultsModal from '@/components/SendResultsModal'
+import SendResultsModal from '@/domains/send/components/SendResultsModal'
 
 type Props = {
   jobId: string | null
