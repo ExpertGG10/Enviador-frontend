@@ -20,35 +20,18 @@ import { ContactChannelSection } from '@/domains/send/components/send-page/Conta
 import { WhatsAppTemplatePreviewSection, VariableBinding } from '@/domains/send/components/send-page/WhatsAppTemplatePreviewSection'
 import { AttachmentWarningsModal } from '@/domains/send/components/send-page/AttachmentWarningsModal'
 import { ColumnModals } from '@/domains/send/components/send-page/ColumnModals'
-
-type SendDraft = {
-  channel: 'whatsapp' | 'email' | 'none'
-  message: string
-  subject: string
-  selectedEmailSender: string
-  selectedEmailTemplateTitle: string
-  selectedWhatsappSenderId: string
-  selectedWhatsappTemplateTitle: string
-  whatsappVariableBindings: Record<string, VariableBinding>
-  phoneColumn: string
-  emailColumn: string
-  fileColumn: string
-  matchMode: 'igual' | 'contem' | 'comeca_com' | 'termina_com'
-}
+import {
+  attachmentMatchesByMode,
+  createIdempotencyKey,
+  extractTemplateVariables,
+  loadSendDraft,
+  normalizeAttachmentReference,
+  type MatchMode,
+  type SendChannel,
+  type SendDraft
+} from '@/domains/send/utils/sendHelpers'
 
 const SEND_DRAFT_STORAGE_KEY = 'enviador_send_draft_v1'
-
-function loadSendDraft(): SendDraft | null {
-  if (typeof window === 'undefined') return null
-
-  try {
-    const raw = window.localStorage.getItem(SEND_DRAFT_STORAGE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as SendDraft
-  } catch {
-    return null
-  }
-}
 
 type SendPageProps = {
   onNavigate?: (page: AppPage) => void
@@ -57,7 +40,7 @@ type SendPageProps = {
 export default function SendPage({ onNavigate }: SendPageProps) {
   const { token } = useAuth()
   const [accountSettings, setAccountSettings] = useState<AccountSettings>(() => accountSettingsService.getCachedSettings())
-  const initialDraft = React.useMemo(() => loadSendDraft(), [])
+  const initialDraft = React.useMemo(() => loadSendDraft(SEND_DRAFT_STORAGE_KEY), [])
 
   const buildWhatsappStatus = React.useCallback((sender: {
     phoneNumber: string
@@ -91,7 +74,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   const [rowsToSend, setRowsToSend] = useState<Row[]>([])
   
   // Channel & configuration
-  const [channel, setChannel] = useState<'whatsapp' | 'email' | 'none'>('none')
+  const [channel, setChannel] = useState<SendChannel>('none')
   const [message, setMessage] = useState<string>('')
   const [subject, setSubject] = useState<string>('')
   const [selectedEmailSender, setSelectedEmailSender] = useState<string>(initialDraft?.selectedEmailSender || accountSettings.gmailSenders[0]?.senderEmail || '')
@@ -108,7 +91,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   /** keyed by button.payload → functionType + attachment entries */
   const [whatsappButtonActions, setWhatsappButtonActions] = useState<Record<string, 'none' | 'attachment'>>({})
   const [fileColumn, setFileColumn] = useState<string>(initialDraft?.fileColumn || '')
-  const [matchMode, setMatchMode] = useState<'igual' | 'contem' | 'comeca_com' | 'termina_com'>(initialDraft?.matchMode || 'contem')
+  const [matchMode, setMatchMode] = useState<MatchMode>(initialDraft?.matchMode || 'contem')
   
   // Contact columns
   const [phoneColumn, setPhoneColumn] = useState<string>(initialDraft?.phoneColumn || '')
@@ -191,21 +174,12 @@ export default function SendPage({ onNavigate }: SendPageProps) {
   const whatsappTemplateVariables = React.useMemo(() => {
     if (!whatsappTemplatePreview) return [] as string[]
 
-    const vars = new Set<string>()
-    const searchableText = [
+    return extractTemplateVariables([
       whatsappTemplatePreview.header,
       whatsappTemplatePreview.body,
       whatsappTemplatePreview.footer,
       ...(whatsappTemplatePreview.buttons || []).flatMap(button => [button.label, button.payload])
-    ].join('\n')
-
-    const matches = searchableText.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)
-    for (const match of matches) {
-      const variable = match[1].trim()
-      if (variable) vars.add(variable)
-    }
-
-    return Array.from(vars)
+    ])
   }, [whatsappTemplatePreview])
 
   useEffect(() => {
@@ -641,39 +615,6 @@ export default function SendPage({ onNavigate }: SendPageProps) {
     setMessage(prev => prev + ' {' + placeholder + '}')
   }
 
-  function normalizeAttachmentReference(name: string): string {
-    if (!name) return ''
-    let normalized = String(name).trim()
-    normalized = normalized.replace(/^[\s\-→>»•]+/, '')
-    normalized = normalized.trim()
-    normalized = normalized.replace(/\.(jpg|jpeg|png|gif|pdf|docx|doc|xlsx|xls|zip|txt)$/i, '')
-    return normalized.toLowerCase()
-  }
-
-  function attachmentMatchesByMode(fileNameValue: string, fileName: string): boolean {
-    const normValue = normalizeAttachmentReference(fileNameValue)
-    const normFile = normalizeAttachmentReference(fileName)
-
-    switch (matchMode) {
-      case 'igual':
-        return normValue === normFile
-      case 'comeca_com':
-        return normFile.startsWith(normValue)
-      case 'termina_com':
-        return normFile.endsWith(normValue)
-      case 'contem':
-      default:
-        return normFile.includes(normValue)
-    }
-  }
-
-  function createIdempotencyKey(): string {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID()
-    }
-    return `wa-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-  }
-
   async function handleSend() {
     if (channel === 'none') {
       setErrorModal({ title: 'Campo obrigatório', message: 'Selecione um canal antes de enviar.' })
@@ -825,7 +766,7 @@ export default function SendPage({ onNavigate }: SendPageProps) {
         }
         
         // Procura por arquivos que correspondem ao valor da coluna
-        const matchedFiles = attachments.filter(f => attachmentMatchesByMode(fileNameValue, f.name))
+        const matchedFiles = attachments.filter(f => attachmentMatchesByMode(fileNameValue, f.name, matchMode))
         
         recipientAttachments.set(index, matchedFiles.map(f => f.name))
         attachmentPreview.push({ index, contact, attachments: matchedFiles.map(f => f.name) })
